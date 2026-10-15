@@ -7,12 +7,11 @@
   const layerSelect = $("active-layer");
   const loginDialog = $("login-dialog");
   const featureDialog = $("feature-dialog");
-  const renameDialog = $("layer-rename-dialog");
   const layerVisibilityKey = "cymap.layerVisibility.v1";
   const state = {
     supabase: null, map: null, draw: null, layers: [], features: [],
     isEditor: false, user: null, selectedFeature: null, editingExistingId: null,
-    visibility: {}, pendingDrawIds: new Set(), selectedLayerId: null
+    visibility: {}, pendingDrawIds: new Set(), selectedLayerId: null, additionalLayerId: null
   };
 
   function setStatus(message, bad = false) {
@@ -36,6 +35,10 @@
   }
   function getLayer(id) { return state.layers.find(x => x.id === id); }
   function getFeature(id) { return state.features.find(x => x.id === id); }
+  function additionalLayer() { return state.layers.find(x => x.slug === "additional_data"); }
+  function canModifyFeature(feature) {
+    return !!state.isEditor && !!feature && getLayer(feature.layer_id)?.slug === "additional_data";
+  }
   function featureTitle(f) {
     const lang = document.documentElement.lang === "el" ? "el" : "en";
     return (lang === "el" ? f.name_el : f.name_en) || f.name_el || f.name_en || "Unnamed feature";
@@ -90,27 +93,63 @@
     }
   }
 
+  function configureSatelliteAndGreekLabels() {
+    // Keep OpenFreeMap/OpenStreetMap settlement labels, preferring Greek names
+    // and then English names. We deliberately do not fall back to the raw
+    // local "name" field, which can be Turkish in some parts of Cyprus.
+    const originalLayers = (state.map.getStyle()?.layers || []).slice();
+    const placeLabels = originalLayers.filter(layer =>
+      layer.type === "symbol" &&
+      layer["source-layer"] === "place" &&
+      layer.layout &&
+      layer.layout["text-field"] !== undefined
+    );
+    const keep = new Set(placeLabels.map(layer => layer.id));
+    const greekEnglishName = [
+      "coalesce",
+      ["get", "name:el"],
+      ["get", "name_el"],
+      ["get", "name:en"],
+      ["get", "name_en"]
+    ];
+    for (const layer of placeLabels) {
+      state.map.setLayoutProperty(layer.id, "text-field", greekEnglishName);
+    }
+    for (const layer of originalLayers.slice().reverse()) {
+      if (!keep.has(layer.id) && state.map.getLayer(layer.id)) {
+        state.map.removeLayer(layer.id);
+      }
+    }
+    state.map.addSource("esriImagery", {
+      type: "raster",
+      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      tileSize: 256,
+      attribution: "Satellite imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+    });
+    state.map.addLayer(
+      { id: "satellite", type: "raster", source: "esriImagery" },
+      placeLabels.length ? placeLabels[0].id : undefined
+    );
+    if (!placeLabels.length) {
+      console.warn("OpenFreeMap style loaded, but no place-label layers were found.");
+    }
+  }
+
   function initMap() {
     state.map = new maplibregl.Map({
       container: "map",
       center: cfg.MAP_CENTER || [33.2, 35.1],
       zoom: cfg.MAP_ZOOM || 8,
-      style: {
-        version: 8,
-        sources: {
-          esriImagery: {
-            type: "raster",
-            tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-            tileSize: 256,
-            attribution: "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
-          }
-        },
-        layers: [{ id: "satellite", type: "raster", source: "esriImagery" }]
-      }
+      style: "https://tiles.openfreemap.org/styles/liberty"
     });
     state.map.addControl(new maplibregl.NavigationControl(), "top-right");
     state.map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     state.map.on("load", () => {
+      try {
+        configureSatelliteAndGreekLabels();
+      } catch (e) {
+        console.error("Could not configure satellite/Greek place labels:", e);
+      }
       state.mapLoaded = true;
       for (const layer of state.layers) addLayerToMap(layer);
       refreshAllSources();
@@ -140,6 +179,10 @@
     if (featuresResult.error) throw featuresResult.error;
     state.layers = layersResult.data || [];
     state.features = featuresResult.data || [];
+    state.additionalLayerId = additionalLayer()?.id || null;
+    if (!state.additionalLayerId) {
+      throw new Error('Missing required layer "ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ". Run the CYMAP protection migration SQL in Supabase.');
+    }
     // Default: all layers visible except the permanent KD layer.
     for (const layer of state.layers) {
       if (!(layer.id in state.visibility)) state.visibility[layer.id] = layer.slug !== "kd";
@@ -213,29 +256,31 @@
       row.innerHTML = `
         <input type="checkbox" aria-label="Toggle ${escapeHtml(layer.name_en)}" ${checked ? "checked" : ""}>
         <span class="layer-name"><strong>${escapeHtml(layer.name_el || layer.name_en)}</strong><small>${featureCount} features</small></span>
-        ${state.isEditor ? '<button class="icon-button rename-layer" title="Rename layer" aria-label="Rename layer">✎</button>' : ''}`;
+        `;
       row.querySelector('input').addEventListener("change", (e) => {
         state.visibility[layer.id] = e.target.checked;
         saveVisibility();
         setMapLayerVisibility(layer);
       });
-      const renameBtn = row.querySelector(".rename-layer");
-      if (renameBtn) renameBtn.addEventListener("click", () => openRenameDialog(layer));
       layersEl.appendChild(row);
     }
   }
   function renderLayerSelect() {
-    const current = layerSelect.value;
+    const layer = additionalLayer();
     layerSelect.innerHTML = "";
-    for (const layer of state.layers) {
+    if (layer) {
       const opt = document.createElement("option");
       opt.value = layer.id;
-      opt.textContent = layer.name_el || layer.name_en;
+      opt.textContent = layer.name_el || "ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ";
       layerSelect.appendChild(opt);
+      layerSelect.value = layer.id;
+      state.selectedLayerId = layer.id;
+      state.additionalLayerId = layer.id;
+    } else {
+      state.selectedLayerId = null;
+      state.additionalLayerId = null;
     }
-    if (state.layers.some(l => l.id === current)) layerSelect.value = current;
-    else if (state.layers.length) layerSelect.value = state.layers[0].id;
-    state.selectedLayerId = layerSelect.value || null;
+    layerSelect.disabled = true;
   }
 
   async function applySession(user) {
@@ -288,6 +333,7 @@
   }
   function beginDraw(mode) {
     try {
+      if (!state.additionalLayerId) throw new Error('The required layer "ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ" is missing.');
       const draw = ensureDraw();
       state.editingExistingId = null;
       $("draw-help").textContent = mode === "draw_point"
@@ -301,9 +347,9 @@
     for (const feature of e.features || []) {
       const props = feature.properties || {};
       const row = {
-        layer_id: layerSelect.value,
-        name_el: props.name_el || "",
-        name_en: props.name_en || "",
+        layer_id: state.additionalLayerId,
+        name_el: "",
+        name_en: "",
         description: props.description || "",
         geometry: feature.geometry,
         properties: {}
@@ -321,7 +367,13 @@
     if (!state.isEditor) return;
     for (const feature of e.features || []) {
       const id = feature.properties?.id || feature.id;
-      if (!id || !getFeature(id)) continue;
+      const existingFeature = getFeature(id);
+      if (!id || !existingFeature) continue;
+      if (!canModifyFeature(existingFeature)) {
+        alert("The original five layers are protected and cannot be edited.");
+        refreshAllSources();
+        continue;
+      }
       const { data, error } = await state.supabase.from("map_features")
         .update({ geometry: feature.geometry, updated_at: new Date().toISOString() })
         .eq("id", id).select("*").single();
@@ -331,18 +383,11 @@
       refreshAllSources();
     }
   }
-  async function onDrawDelete(e) {
-    if (!state.isEditor) return;
-    // Draw deletes are only used after explicit user confirmation in the feature dialog.
-    for (const feature of e.features || []) {
-      const id = feature.properties?.id || feature.id;
-      if (!id) continue;
-      const { error } = await state.supabase.from("map_features").delete().eq("id", id);
-      if (error) alert("Could not delete feature: " + error.message);
-      state.features = state.features.filter(f => f.id !== id);
-    }
+  function onDrawDelete() {
+    // Mapbox Draw deletions are local editor-tool operations only.
+    // Database deletion is performed exclusively by deleteFeature(), which
+    // checks the layer and is additionally restricted by Supabase RLS.
     refreshAllSources();
-    renderLayers();
   }
 
   function showFeaturePopup(feature, lngLat) {
@@ -354,9 +399,9 @@
         ${feature.name_en && feature.name_el ? `<div class="popup-description">${escapeHtml(feature.name_en)}</div>` : ""}
         ${feature.description ? `<div class="popup-description">${escapeHtml(feature.description)}</div>` : ""}
         <div class="popup-description">Layer: ${escapeHtml(layer?.name_el || layer?.name_en || "")}</div>
-        ${state.isEditor ? `<div class="popup-actions"><button data-action="details">Edit details</button><button data-action="shape">Edit shape</button></div>` : ""}`)
+        ${canModifyFeature(feature) ? `<div class="popup-actions"><button data-action="details">Rename / edit details</button><button data-action="shape">Edit shape</button></div>` : ""}`)
       .addTo(state.map);
-    if (state.isEditor) {
+    if (canModifyFeature(feature)) {
       popup.getElement().querySelector('[data-action="details"]')?.addEventListener("click", () => openFeatureDialog(feature, true));
       popup.getElement().querySelector('[data-action="shape"]')?.addEventListener("click", () => editShape(feature));
     }
@@ -365,14 +410,17 @@
     state.selectedFeature = feature;
     $("feature-heading").textContent = feature.id ? "Edit feature details" : "New feature";
     $("feature-id").value = feature.id || "";
-    $("feature-name-el").value = feature.name_el || "";
-    $("feature-name-en").value = feature.name_en || "";
+    $("feature-name").value = feature.name_el || feature.name_en || "";
     $("feature-description").value = feature.description || "";
-    $("feature-delete").classList.toggle("hidden", !(state.isEditor && allowDelete && !!feature.id));
+    $("feature-delete").classList.toggle("hidden", !(canModifyFeature(feature) && allowDelete && !!feature.id));
     $("feature-error").textContent = "";
     featureDialog.showModal();
   }
   function editShape(feature) {
+    if (!canModifyFeature(feature)) {
+      alert("The original five layers are protected. Only features in ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ can be edited.");
+      return;
+    }
     try {
       const draw = ensureDraw();
       // Draw IDs must be unique strings; preserve DB id in feature properties.
@@ -391,19 +439,27 @@
     if (!state.isEditor || !state.selectedFeature) return;
     const f = state.selectedFeature;
     const payload = {
-      name_el: $("feature-name-el").value.trim(),
-      name_en: $("feature-name-en").value.trim(),
+      name_el: $("feature-name").value.trim(),
+      name_en: "",
       description: $("feature-description").value.trim(),
       updated_at: new Date().toISOString()
     };
     $("feature-error").textContent = "";
     if (f.id) {
+      if (!canModifyFeature(f)) {
+        $("feature-error").textContent = "The original five layers are protected and cannot be renamed.";
+        return;
+      }
+      if (!payload.name_el) {
+        $("feature-error").textContent = "Please enter a name.";
+        return;
+      }
       const { data, error } = await state.supabase.from("map_features").update(payload).eq("id", f.id).select("*").single();
       if (error) { $("feature-error").textContent = error.message; return; }
       const idx = state.features.findIndex(x => x.id === f.id);
       if (idx >= 0) state.features[idx] = data;
     } else {
-      f.name_el = payload.name_el; f.name_en = payload.name_en; f.description = payload.description;
+      f.name_el = payload.name_el; f.name_en = ""; f.description = payload.description;
       state.features.push(f);
     }
     featureDialog.close();
@@ -411,7 +467,10 @@
   }
   async function deleteFeature() {
     const f = state.selectedFeature;
-    if (!state.isEditor || !f?.id) return;
+    if (!canModifyFeature(f) || !f?.id) {
+      $("feature-error").textContent = "The original five layers are protected and cannot be deleted.";
+      return;
+    }
     if (!confirm("Delete this feature permanently? This cannot be undone.")) return;
     const { error } = await state.supabase.from("map_features").delete().eq("id", f.id);
     if (error) { $("feature-error").textContent = error.message; return; }
@@ -419,23 +478,6 @@
     if (state.draw?.get(f.id)) state.draw.delete(f.id);
     featureDialog.close();
     refreshAllSources(); renderLayers();
-  }
-  function openRenameDialog(layer) {
-    $("rename-layer-id").value = layer.id;
-    $("rename-name-el").value = layer.name_el || "";
-    $("rename-name-en").value = layer.name_en || "";
-    $("rename-error").textContent = "";
-    renameDialog.showModal();
-  }
-  async function saveLayerNames(e) {
-    e.preventDefault();
-    const id = $("rename-layer-id").value;
-    const payload = { name_el: $("rename-name-el").value.trim(), name_en: $("rename-name-en").value.trim() };
-    const { data, error } = await state.supabase.from("map_layers").update(payload).eq("id", id).select("*").single();
-    if (error) { $("rename-error").textContent = error.message; return; }
-    const idx = state.layers.findIndex(x => x.id === id);
-    if (idx >= 0) state.layers[idx] = data;
-    renameDialog.close(); renderLayers(); renderLayerSelect();
   }
 
   $("login-open").addEventListener("click", () => { $("login-error").textContent = ""; loginDialog.showModal(); });
@@ -455,8 +497,6 @@
   $("feature-close").addEventListener("click", () => featureDialog.close());
   $("feature-form").addEventListener("submit", saveFeatureDetails);
   $("feature-delete").addEventListener("click", deleteFeature);
-  $("rename-close").addEventListener("click", () => renameDialog.close());
-  $("layer-rename-form").addEventListener("submit", saveLayerNames);
   layerSelect.addEventListener("change", () => state.selectedLayerId = layerSelect.value);
   $("draw-point").addEventListener("click", () => beginDraw("draw_point"));
   $("draw-polygon").addEventListener("click", () => beginDraw("draw_polygon"));
