@@ -1,0 +1,91 @@
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f5f7fb;font-synthesis:none}*{box-sizing:border-box}body{margin:0;min-height:100vh}.topbar{height:68px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:relative;z-index:2}.brand{display:flex;align-items:center;gap:11px}.brand-mark{width:38px;height:38px;border-radius:12px;background:#174c3c;color:white;display:grid;place-items:center;font-size:21px;font-weight:800}.brand strong{display:block;letter-spacing:.08em;font-size:14px}.brand small{display:block;color:#64748b;font-size:12px;margin-top:2px}.header-actions{display:flex;align-items:center;gap:10px}.status{font-size:12px;color:#64748b}.app{height:calc(100vh - 68px);min-height:500px;display:grid;grid-template-columns:310px minmax(0,1fr)}.sidebar{background:white;border-right:1px solid #e2e8f0;padding:20px 16px 12px;overflow:auto;display:flex;flex-direction:column;gap:14px}.side-heading h1{font-size:17px;margin:0 0 5px}.side-heading p,.muted{color:#64748b;font-size:12px;margin:0;line-height:1.5}.layers{display:flex;flex-direction:column;gap:8px}.layer-row{border:1px solid #e2e8f0;border-radius:10px;padding:10px;display:flex;align-items:center;gap:9px;min-width:0}.layer-row input{accent-color:#17694d;width:16px;height:16px;flex-shrink:0}.layer-name{font-size:12px;line-height:1.35;flex:1;min-width:0;overflow-wrap:anywhere}.layer-name strong{display:block;font-weight:650}.layer-name small{display:block;color:#64748b;margin-top:2px}.icon-button{border:0;background:transparent;color:#526174;border-radius:6px;padding:5px;cursor:pointer;font-size:15px}.icon-button:hover{background:#eef2f7}.sidebar-note{font-size:11px;line-height:1.5;color:#64748b;background:#f8fafc;padding:10px;border-radius:8px}.editor-panel{border-top:1px solid #e2e8f0;padding-top:14px;margin-top:2px}.editor-panel h2{font-size:14px;margin:0 0 5px}.editor-panel label,.dialog label{display:block;font-size:12px;font-weight:650;margin:12px 0 5px}.editor-panel select,.dialog input,.dialog textarea{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:inherit;font-size:13px;background:#fff}.button-stack{display:grid;gap:7px;margin-top:12px}.button{border:1px solid transparent;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap}.button:disabled{opacity:.5;cursor:not-allowed}.button.primary{background:#17694d;color:#fff}.button.primary:hover{background:#11553d}.button.secondary{background:white;border-color:#cbd5e1;color:#263448}.button.secondary:hover{background:#f8fafc}.button.danger{background:#b42318;color:white}.button.full{width:100%;margin-top:15px}.hidden{display:none!important}.small{font-size:11px!important;margin-top:9px}.sidebar footer{margin-top:auto;padding-top:12px;color:#94a3b8;font-size:10px;line-height:1.4}.map-wrap{position:relative;min-width:0;min-height:0}#map{position:absolute;inset:0}.map-tip{position:absolute;left:14px;bottom:14px;background:#fff;color:#334155;border-radius:8px;padding:8px 10px;box-shadow:0 2px 12px #0f172a22;font-size:11px;pointer-events:none}.dialog{border:0;border-radius:16px;padding:24px;width:min(420px,calc(100vw - 28px));box-shadow:0 20px 80px #0f172a33}.dialog::backdrop{background:#0f172a66;backdrop-filter:blur(2px)}dialog{border:0;border-radius:16px;padding:24px;width:min(420px,calc(100vw - 28px));box-shadow:0 20px 80px #0f172a33}dialog::backdrop{background:#0f172a66;backdrop-filter:blur(2px)}dialog h2{font-size:18px;margin:0 0 8px}dialog p{font-size:12px}.dialog-close{position:absolute;right:14px;top:10px;border:0;background:transparent;font-size:25px;color:#64748b;cursor:pointer}.error{color:#b42318;min-height:16px;font-size:12px}.dialog-actions{display:flex;gap:8px;justify-content:space-between;margin-top:14px}.dialog-actions #feature-save{margin-left:auto}.maplibregl-popup-content{font-family:inherit;border-radius:10px;padding:13px;min-width:170px}.popup-title{font-weight:700;font-size:13px;margin-bottom:5px}.popup-description{font-size:12px;line-height:1.5;color:#475569;white-space:pre-wrap}.popup-actions{display:flex;gap:6px;margin-top:10px}.popup-actions button{font-size:11px;border:1px solid #cbd5e1;border-radius:6px;padding:5px 8px;background:#fff;cursor:pointer}.maplibregl-ctrl-group{border-radius:9px!important;overflow:hidden}@media(max-width:760px){.topbar{height:60px;padding:0 12px}.app{height:calc(100vh - 60px);grid-template-columns:1fr;grid-template-rows:auto minmax(300px,1fr)}.sidebar{max-height:43vh;padding:12px;gap:10px;border-right:0;border-bottom:1px solid #e2e8f0}.layers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.layer-row{padding:7px}.layer-name{font-size:11px}.sidebar-note,.sidebar footer{display:none}.editor-panel{padding-top:10px}.button-stack{grid-template-columns:repeat(2,minmax(0,1fr))}.map-wrap{min-height:300px}.status{display:none}}
+
+
+.layer-swatch {
+  width: 12px;
+  height: 26px;
+  border-radius: 4px;
+  flex: 0 0 12px;
+  border: 1px solid #00000020;
+}
+#feature-color {
+  display: block;
+  width: 100%;
+  height: 42px;
+  padding: 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* CYMAP readability and branding adjustments */
+#brand-logo {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex: 0 0 42px;
+}
+.brand {
+  gap: 10px;
+}
+.brand-title {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.layer-name strong {
+  color: #101828;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+.layer-name small, .muted, .small {
+  color: #475467;
+}
+.popup-title {
+  color: #101828;
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.layer-swatch {
+  min-width: 12px;
+}
+
+/* CYMAP v3 UI cleanup and Greek labels */
+#brand-logo { width: 38px; height: 38px; flex: 0 0 38px; object-fit: contain; }
+.brand { gap: 9px; }
+.brand-title { color: #101828; font-weight: 800; }
+.layer-name strong { color: #101828; font-size: 1rem; line-height: 1.35; }
+.layer-name small { color: #344054; font-size: 0.82rem; font-weight: 600; }
+button, input, select, textarea { font-size: 0.96rem; }
+#status:empty { display: none; }
+#draw-help:empty { display: none; }
+.layer-swatch { width: 13px; min-width: 13px; height: 27px; border-radius: 4px; }
+
+/* CYMAP final UI fixes */
+#brand-logo {
+  display: block !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px;
+  object-fit: contain;
+  background: transparent;
+}
+.brand-subtitle, .section-hint, .layer-visibility-note, .editor-note {
+  display: none !important;
+}
+.delete-feature-name {
+  font-weight: 700;
+  color: #101828;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f2f4f7;
+}
+.button.danger {
+  color: #fff;
+  background: #b42318;
+  border-color: #b42318;
+}
+.button.danger:hover { background: #912018; }
+#status:empty { display: none !important; }
