@@ -26,8 +26,9 @@
       <section id="editor-panel" class="editor-panel hidden">
         <h2>Editing tools</h2>
         <p class="muted">Changes are shared with all map visitors.</p>
-        <label for="active-layer">Add new feature to</label>
-        <select id="active-layer"></select>
+        <label>New features are always saved to</label>
+        <div class="fixed-layer-name">ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ</div>
+        <select id="active-layer" class="hidden" aria-hidden="true" tabindex="-1"></select>
         <div class="button-stack">
           <button id="draw-point" class="button primary">＋ Add point</button>
           <button id="draw-polygon" class="button primary">＋ Draw polygon</button>
@@ -37,7 +38,7 @@
         </div>
         <p id="draw-help" class="muted small">Choose a tool to begin. Click a point or polygon to see its details.</p>
       </section>
-      <footer>Satellite imagery © Esri and its data providers.</footer>
+      <footer>Satellite imagery © Esri. Place names © OpenStreetMap contributors / OpenFreeMap.</footer>
     </aside>
     <section class="map-wrap">
       <div id="map" aria-label="Interactive map of Cyprus"></div>
@@ -64,10 +65,8 @@
       <button type="button" id="feature-close" class="dialog-close" aria-label="Close">×</button>
       <h2 id="feature-heading">Feature details</h2>
       <input type="hidden" id="feature-id">
-      <label for="feature-name-el">Name (Greek)</label>
-      <input id="feature-name-el" maxlength="250">
-      <label for="feature-name-en">Name (English)</label>
-      <input id="feature-name-en" maxlength="250">
+      <label for="feature-name">Name</label>
+      <input id="feature-name" maxlength="250" required>
       <label for="feature-description">Description</label>
       <textarea id="feature-description" rows="3"></textarea>
       <div class="dialog-actions">
@@ -78,19 +77,6 @@
     </form>
   </dialog>
 
-  <dialog id="layer-rename-dialog">
-    <form id="layer-rename-form" method="dialog">
-      <button type="button" id="rename-close" class="dialog-close" aria-label="Close">×</button>
-      <h2>Rename layer</h2>
-      <input type="hidden" id="rename-layer-id">
-      <label for="rename-name-el">Name (Greek)</label>
-      <input id="rename-name-el" maxlength="150" required>
-      <label for="rename-name-en">Name (English)</label>
-      <input id="rename-name-en" maxlength="150" required>
-      <p id="rename-error" class="error" role="alert"></p>
-      <button type="submit" class="button primary full">Save layer names</button>
-    </form>
-  </dialog>
 
   <script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.js"></script>
