@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CYMAP — Cyprus Map</title>
+  <link href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css" rel="stylesheet">
+  <link href="https://unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.css" rel="stylesheet">
+  <link href="./style.css" rel="stylesheet">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">C</span><div><strong>CYMAP</strong><small>Cyprus map</small></div></div>
+    <div class="header-actions">
+      <span id="status" class="status">Connecting…</span>
+      <button id="login-open" class="button secondary">Editor sign in</button>
+      <button id="logout" class="button secondary hidden">Sign out</button>
+    </div>
+  </header>
+
+  <main class="app">
+    <aside class="sidebar">
+      <div class="side-heading"><div><h1>Map layers</h1><p>Choose what you want to see.</p></div></div>
+      <div id="layers" class="layers"><div class="empty">Loading layers…</div></div>
+      <div class="sidebar-note">Layer visibility is saved in this browser and does not affect other visitors.</div>
+      <section id="editor-panel" class="editor-panel hidden">
+        <h2>Editing tools</h2>
+        <p class="muted">Changes are shared with all map visitors.</p>
+        <label for="active-layer">Add new feature to</label>
+        <select id="active-layer"></select>
+        <div class="button-stack">
+          <button id="draw-point" class="button primary">＋ Add point</button>
+          <button id="draw-polygon" class="button primary">＋ Draw polygon</button>
+          <button id="edit-selected" class="button secondary">Edit selected shape</button>
+          <button id="save-drawings" class="button primary">Save drawing</button>
+          <button id="cancel-drawing" class="button secondary">Cancel drawing</button>
+        </div>
+        <p id="draw-help" class="muted small">Choose a tool to begin. Click a point or polygon to see its details.</p>
+      </section>
+      <footer>Satellite imagery © Esri and its data providers.</footer>
+    </aside>
+    <section class="map-wrap">
+      <div id="map" aria-label="Interactive map of Cyprus"></div>
+      <div class="map-tip">Click a feature to view its details.</div>
+    </section>
+  </main>
+
+  <dialog id="login-dialog">
+    <form id="login-form" method="dialog">
+      <button type="button" id="login-close" class="dialog-close" aria-label="Close">×</button>
+      <h2>Editor sign in</h2>
+      <p class="muted">Sign in with your authorized editor account.</p>
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" required placeholder="e.g. mjpo">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <p id="login-error" class="error" role="alert"></p>
+      <button class="button primary full" type="submit">Sign in</button>
+    </form>
+  </dialog>
+
+  <dialog id="feature-dialog">
+    <form id="feature-form" method="dialog">
+      <button type="button" id="feature-close" class="dialog-close" aria-label="Close">×</button>
+      <h2 id="feature-heading">Feature details</h2>
+      <input type="hidden" id="feature-id">
+      <label for="feature-name-el">Name (Greek)</label>
+      <input id="feature-name-el" maxlength="250">
+      <label for="feature-name-en">Name (English)</label>
+      <input id="feature-name-en" maxlength="250">
+      <label for="feature-description">Description</label>
+      <textarea id="feature-description" rows="3"></textarea>
+      <div class="dialog-actions">
+        <button id="feature-delete" type="button" class="button danger hidden">Delete feature</button>
+        <button id="feature-save" type="submit" class="button primary">Save</button>
+      </div>
+      <p id="feature-error" class="error" role="alert"></p>
+    </form>
+  </dialog>
+
+  <dialog id="layer-rename-dialog">
+    <form id="layer-rename-form" method="dialog">
+      <button type="button" id="rename-close" class="dialog-close" aria-label="Close">×</button>
+      <h2>Rename layer</h2>
+      <input type="hidden" id="rename-layer-id">
+      <label for="rename-name-el">Name (Greek)</label>
+      <input id="rename-name-el" maxlength="150" required>
+      <label for="rename-name-en">Name (English)</label>
+      <input id="rename-name-en" maxlength="150" required>
+      <p id="rename-error" class="error" role="alert"></p>
+      <button type="submit" class="button primary full">Save layer names</button>
+    </form>
+  </dialog>
+
+  <script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
