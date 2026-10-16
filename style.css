@@ -104,3 +104,42 @@ button, input, select, textarea { font-size: 0.96rem; }
 .maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button { display: block; }
 
 
+
+/* CYMAP: hide visible MapLibre attribution completely */
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib-button,
+.maplibregl-ctrl-attrib-inner {
+  display: none !important;
+}
+
+/* Feature editor: fields in a clear vertical order */
+#feature-form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+#feature-form label {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
+  font-weight: 600;
+  color: #344054;
+}
+#feature-form input#feature-name {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+}
+#feature-form label[for="feature-color"] { margin-top: 4px; }
+#feature-form input#feature-color {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+}
+#feature-form .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
