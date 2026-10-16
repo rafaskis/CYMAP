@@ -32,6 +32,8 @@
         <div class="button-stack">
           <button id="draw-point" class="button primary">＋ Προσθήκη σημείου</button>
           <button id="draw-polygon" class="button primary">＋ Προσθήκη πολυγώνου</button>
+          <button id="coordinate-point" class="button secondary">Προσθήκη σημείου με συντεταγμένες</button>
+          <button id="coordinate-polygon" class="button secondary">Προσθήκη πολυγώνου με συντεταγμένες</button>
         </div>
         
       </section>
@@ -81,6 +83,34 @@
       <div class="dialog-actions">
         <button type="button" id="delete-cancel" class="button secondary">Ακύρωση</button>
         <button type="button" id="delete-confirm" class="button danger">Διαγραφή</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <dialog id="coordinate-dialog" class="dialog">
+    <form id="coordinate-form" method="dialog">
+      <button type="button" id="coordinate-close" class="dialog-close" aria-label="Κλείσιμο">×</button>
+      <h2 id="coordinate-heading">Προσθήκη με συντεταγμένες</h2>
+      <label for="coordinate-name">Όνομα</label>
+      <input id="coordinate-name" maxlength="250" required>
+      <label for="coordinate-color">Χρώμα</label>
+      <input id="coordinate-color" type="color" value="#16a34a" required>
+      <section id="point-coordinate-fields">
+        <label for="point-longitude">Γεωγραφικό μήκος (Longitude)</label>
+        <input id="point-longitude" type="number" step="any" min="-180" max="180" placeholder="π.χ. 33.3823" required>
+        <label for="point-latitude">Γεωγραφικό πλάτος (Latitude)</label>
+        <input id="point-latitude" type="number" step="any" min="-90" max="90" placeholder="π.χ. 35.1856" required>
+      </section>
+      <section id="polygon-coordinate-fields" class="hidden">
+        <p class="muted">Καταχωρίστε τουλάχιστον 3 κορυφές. Οι συντεταγμένες δίνονται ως γεωγραφικό μήκος και πλάτος.</p>
+        <div id="polygon-coordinate-list"></div>
+        <button type="button" id="add-coordinate-row" class="button secondary">＋ Προσθήκη κορυφής</button>
+      </section>
+      <p id="coordinate-error" class="error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" id="coordinate-cancel" class="button secondary">Ακύρωση</button>
+        <button type="submit" id="coordinate-save" class="button primary">Αποθήκευση</button>
       </div>
     </form>
   </dialog>
