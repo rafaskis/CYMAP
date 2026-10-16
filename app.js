@@ -200,10 +200,14 @@
       if (state.isEditor && state.draw && state.draw.getMode() !== "simple_select" &&
           state.draw.getMode() !== "direct_select") return;
       const hits = state.map.queryRenderedFeatures(e.point, { layers: state.renderLayerIds || [] });
-      if (hits.length) {
-        const props = hits[0].properties || {};
+      // Skip permanent layers and find a user-created feature underneath them if present.
+      for (const hit of hits) {
+        const props = hit.properties || {};
         const f = getFeature(props.id);
-        if (f) showFeaturePopup(f, e.lngLat);
+        if (f && getLayer(f.layer_id)?.slug === "additional_data") {
+          showFeaturePopup(f, e.lngLat);
+          break;
+        }
       }
     });
     state.map.on("error", (e) => console.warn("MapLibre error:", e.error || e));
@@ -413,20 +417,52 @@
     if (getLayer(feature.layer_id)?.slug === "sba" && /^Βρετανικές Κυρίαρχες Περιοχές Βάσεων(?:\s+\d+)?$/i.test(raw)) return "ΒRITISH SBA";
     return raw;
   }
+
+  function formatCoord(value) {
+    return Number(value).toFixed(6).replace(/\\.?0+$/, "");
+  }
+
+  function coordinateSummary(feature) {
+    const geometry = feature?.geometry;
+    if (!geometry) return "";
+    if (geometry.type === "Point") {
+      const [lng, lat] = geometry.coordinates;
+      return `Συντεταγμένες: ${formatCoord(lat)}, ${formatCoord(lng)} (πλάτος, μήκος)`;
+    }
+    if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
+      const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+      const lines = [];
+      polygons.forEach((polygon, pIndex) => {
+        const ring = polygon?.[0] || [];
+        const vertices = ring.slice(0, -1);
+        vertices.forEach((coord, index) => {
+          lines.push(`${pIndex ? `Πολύγωνο ${pIndex + 1}, ` : ""}Κορυφή ${index + 1}: ${formatCoord(coord[1])}, ${formatCoord(coord[0])}`);
+        });
+      });
+      return lines.join("\\n");
+    }
+    return "";
+  }
+
   function showFeaturePopup(feature, lngLat) {
     const title = displayFeatureName(feature);
     const canEdit = canModifyFeature(feature);
     const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "280px" })
       .setLngLat(lngLat)
       .setHTML(`<div class="popup-title">${escapeHtml(title)}</div>
+        <div class="coordinate-summary">${escapeHtml(coordinateSummary(feature)).replace(/\\n/g, "<br>")}</div>
         ${canEdit ? `<div class="popup-actions"><button data-action="details">Αλλαγή</button><button data-action="delete">Διαγραφή</button></div>` : ""}`)
       .addTo(state.map);
     if (canEdit) {
       popup.getElement().querySelector('[data-action="details"]')
-        ?.addEventListener("click", () => openFeatureDialog(feature, true));
+        ?.addEventListener("click", () => {
+          popup.remove();
+          openFeatureDialog(feature, true);
+        });
       popup.getElement().querySelector('[data-action="delete"]')
-        ?.addEventListener("click", async () => {
-          state.selectedFeature = feature;
+        ?.addEventListener("click", () => {
+          popup.remove();
+          state.selectedFeature = null;
           openDeleteDialog(feature, false);
         });
     }
@@ -496,6 +532,9 @@
     state.closeFeatureAfterDelete = !!fromFeatureDialog;
     $("delete-feature-name").textContent = displayFeatureName(feature);
     $("delete-error").textContent = "";
+    if (featureDialog.open) featureDialog.close();
+    // Also clear the map popup immediately so it cannot remain over the deletion dialog.
+    document.querySelectorAll(".maplibregl-popup").forEach(el => el.remove());
     $("delete-dialog").showModal();
   }
 
@@ -537,6 +576,130 @@
     }
   }
 
+
+  let coordinateMode = "point";
+
+  function resetCoordinateDialog(mode) {
+    coordinateMode = mode;
+    $("coordinate-heading").textContent = mode === "point"
+      ? "Προσθήκη σημείου με συντεταγμένες"
+      : "Προσθήκη πολυγώνου με συντεταγμένες";
+    $("point-coordinate-fields").classList.toggle("hidden", mode !== "point");
+    $("polygon-coordinate-fields").classList.toggle("hidden", mode !== "polygon");
+    $("point-longitude").required = mode === "point";
+    $("point-latitude").required = mode === "point";
+    $("coordinate-name").value = "";
+    $("coordinate-color").value = PERMANENT_LAYER_COLORS.additional_data;
+    $("coordinate-error").textContent = "";
+    const list = $("polygon-coordinate-list");
+    list.innerHTML = "";
+    if (mode === "polygon") {
+      addPolygonCoordinateRow();
+      addPolygonCoordinateRow();
+      addPolygonCoordinateRow();
+    }
+    $("coordinate-dialog").showModal();
+    setTimeout(() => $("coordinate-name").focus(), 0);
+  }
+
+  function addPolygonCoordinateRow() {
+    const list = $("polygon-coordinate-list");
+    const index = list.children.length + 1;
+    const row = document.createElement("div");
+    row.className = "coordinate-row";
+    row.innerHTML = `
+      <div><label>Κορυφή ${index} — Μήκος</label><input class="vertex-lng" type="number" step="any" min="-180" max="180" required placeholder="33.3823"></div>
+      <div><label>Πλάτος</label><input class="vertex-lat" type="number" step="any" min="-90" max="90" required placeholder="35.1856"></div>
+      <button type="button" class="button secondary remove-coordinate-row" aria-label="Αφαίρεση κορυφής">×</button>`;
+    row.querySelector(".remove-coordinate-row").addEventListener("click", () => {
+      if (list.children.length <= 3) {
+        $("coordinate-error").textContent = "Το πολύγωνο πρέπει να έχει τουλάχιστον 3 κορυφές.";
+        return;
+      }
+      row.remove();
+      [...list.children].forEach((el, i) => {
+        el.querySelector("div:first-child label").textContent = `Κορυφή ${i + 1} — Μήκος`;
+      });
+      $("coordinate-error").textContent = "";
+    });
+    list.appendChild(row);
+  }
+
+  async function saveCoordinateFeature(e) {
+    e.preventDefault();
+    if (!state.isEditor || !state.additionalLayerId) {
+      $("coordinate-error").textContent = "Απαιτείται εξουσιοδοτημένη είσοδος.";
+      return;
+    }
+    const name = $("coordinate-name").value.trim();
+    const color = $("coordinate-color").value;
+    if (!name) {
+      $("coordinate-error").textContent = "Συμπληρώστε όνομα.";
+      return;
+    }
+    let geometry;
+    if (coordinateMode === "point") {
+      const lng = Number($("point-longitude").value);
+      const lat = Number($("point-latitude").value);
+      if (!Number.isFinite(lng) || !Number.isFinite(lat) || lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+        $("coordinate-error").textContent = "Ελέγξτε το γεωγραφικό μήκος (-180 έως 180) και πλάτος (-90 έως 90).";
+        return;
+      }
+      geometry = { type: "Point", coordinates: [lng, lat] };
+    } else {
+      const rows = [...$("polygon-coordinate-list").querySelectorAll(".coordinate-row")];
+      if (rows.length < 3) {
+        $("coordinate-error").textContent = "Το πολύγωνο πρέπει να έχει τουλάχιστον 3 κορυφές.";
+        return;
+      }
+      const ring = [];
+      for (const row of rows) {
+        const lng = Number(row.querySelector(".vertex-lng").value);
+        const lat = Number(row.querySelector(".vertex-lat").value);
+        if (row.querySelector(".vertex-lng").value === "" || row.querySelector(".vertex-lat").value === "" ||
+            !Number.isFinite(lng) || !Number.isFinite(lat) || lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+          $("coordinate-error").textContent = "Συμπληρώστε έγκυρο μήκος και πλάτος για κάθε κορυφή.";
+          return;
+        }
+        ring.push([lng, lat]);
+      }
+      const first = ring[0], last = ring[ring.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) ring.push([...first]);
+      geometry = { type: "Polygon", coordinates: [ring] };
+    }
+    $("coordinate-save").disabled = true;
+    $("coordinate-error").textContent = "";
+    const { data, error } = await state.supabase.from("map_features").insert({
+      layer_id: state.additionalLayerId,
+      name_el: name, name_en: "",
+      geometry,
+      properties: { color }
+    }).select("*").single();
+    $("coordinate-save").disabled = false;
+    if (error) {
+      $("coordinate-error").textContent = error.message;
+      return;
+    }
+    state.features.push(data);
+    $("coordinate-dialog").close();
+    refreshAllSources();
+    renderLayers();
+    // Pan to the new feature, useful for both coordinate-based creation modes.
+    const center = geometry.type === "Point"
+      ? geometry.coordinates
+      : [ringCentroidLongitude(geometry.coordinates[0]), ringCentroidLatitude(geometry.coordinates[0])];
+    state.map?.easeTo({ center, zoom: Math.max(state.map.getZoom(), 11) });
+  }
+
+  function ringCentroidLongitude(ring) {
+    const vertices = ring.slice(0, -1);
+    return vertices.reduce((sum, coord) => sum + coord[0], 0) / Math.max(vertices.length, 1);
+  }
+  function ringCentroidLatitude(ring) {
+    const vertices = ring.slice(0, -1);
+    return vertices.reduce((sum, coord) => sum + coord[1], 0) / Math.max(vertices.length, 1);
+  }
+
   $("login-open").addEventListener("click", () => { $("login-error").textContent = ""; loginDialog.showModal(); });
   $("login-close").addEventListener("click", () => loginDialog.close());
   $("logout").addEventListener("click", async () => { await state.supabase.auth.signOut(); clearSession(); });
@@ -561,7 +724,23 @@
   if (deleteCancelButton) deleteCancelButton.addEventListener("click", () => $("delete-dialog").close());
   if (deleteConfirmButton) deleteConfirmButton.addEventListener("click", deleteFeature);
   $("draw-point").addEventListener("click", () => beginDraw("draw_point"));
+
   $("draw-polygon").addEventListener("click", () => beginDraw("draw_polygon"));
+  $("coordinate-point").addEventListener("click", () => {
+    if (!state.isEditor) { alert("Απαιτείται εξουσιοδοτημένη είσοδος."); return; }
+    resetCoordinateDialog("point");
+  });
+  $("coordinate-polygon").addEventListener("click", () => {
+    if (!state.isEditor) { alert("Απαιτείται εξουσιοδοτημένη είσοδος."); return; }
+    resetCoordinateDialog("polygon");
+  });
+  $("add-coordinate-row").addEventListener("click", () => {
+    addPolygonCoordinateRow();
+    $("coordinate-error").textContent = "";
+  });
+  $("coordinate-form").addEventListener("submit", saveCoordinateFeature);
+  $("coordinate-close").addEventListener("click", () => $("coordinate-dialog").close());
+  $("coordinate-cancel").addEventListener("click", () => $("coordinate-dialog").close());
 
   const sidebarCollapseButton = document.getElementById("sidebar-collapse");
   if (sidebarCollapseButton) {
