@@ -175,6 +175,7 @@
       zoom: cfg.MAP_ZOOM || 8,
       style: "https://tiles.openfreemap.org/styles/liberty"
     });
+    state.map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     state.map.addControl(new maplibregl.NavigationControl(), "top-right");
     state.map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     state.map.on("load", () => {
@@ -366,9 +367,12 @@
       if (!state.additionalLayerId) throw new Error('Missing layer "ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ".');
       const draw = ensureDraw();
       draw.deleteAll();
-      $("draw-help").textContent = mode === "draw_point"
-        ? "Click the map once to place a point. Enter a name and color to save it."
-        : "Click to add polygon corners, then double-click to finish. Enter a name and color to save it.";
+      const drawHelp = $("draw-help");
+      if (drawHelp) {
+        drawHelp.textContent = mode === "draw_point"
+          ? "Click the map once to place a point. Enter a name and color to save it."
+          : "Click to add polygon corners, then double-click to finish. Enter a name and color to save it.";
+      }
       draw.changeMode(mode);
     } catch (e) { alert(e.message); }
   }
@@ -516,7 +520,8 @@
       if (state.draw) {
         try { state.draw.deleteAll(); state.draw.changeMode("simple_select"); } catch {}
       }
-      $("draw-help").textContent = "Creation cancelled. Choose Add point or Draw polygon to try again.";
+      const drawHelp = $("draw-help");
+      if (drawHelp) drawHelp.textContent = "Creation cancelled. Choose Add point or Draw polygon to try again.";
     } else {
       state.selectedFeature = null;
     }
