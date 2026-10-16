@@ -486,6 +486,7 @@
     state.closeFeatureAfterDelete = !!fromFeatureDialog;
     $("delete-feature-name").textContent = displayFeatureName(feature);
     $("delete-error").textContent = "";
+    if (featureDialog.open) featureDialog.close();
     $("delete-dialog").showModal();
   }
 
