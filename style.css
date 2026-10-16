@@ -232,3 +232,18 @@ body.sidebar-collapsed #map { width: 100% !important; }
     transform: none;
   }
 }
+
+/* CYMAP v15: extra room for the sidebar collapse arrow */
+@media (min-width: 761px) {
+  .sidebar {
+    padding-right: 30px;
+    max-width: min(460px, 48vw);
+  }
+  #sidebar-collapse {
+    right: -18px;
+    z-index: 100;
+  }
+  body.sidebar-collapsed #sidebar-collapse {
+    right: -28px;
+  }
+}
