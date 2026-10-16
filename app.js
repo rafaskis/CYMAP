@@ -396,6 +396,7 @@
     if (getLayer(feature.layer_id)?.slug === "controlled_areas" && /^Ελεγχόμενη περιοχή(?:\s+\d+)?$/i.test(raw)) return "ΕΛΕΓΧΟΜΕΝΕΣ ΠΕΡΙΟΧΕΣ";
     if (getLayer(feature.layer_id)?.slug === "uncontrolled_areas" && /^Μη ελεγχόμενη περιοχή(?:\s+\d+)?$/i.test(raw)) return "ΜΗ ΕΛΕΓΧΟΜΕΝΕΣ ΠΕΡΙΟΧΕΣ";
     if (getLayer(feature.layer_id)?.slug === "un" && /^Ζώνη των Ηνωμένων Εθνών(?:\s+\d+)?$/i.test(raw)) return "UN BUFFER ZONE";
+    if (getLayer(feature.layer_id)?.slug === "sba" && /^Βρετανικές Κυρίαρχες Περιοχές Βάσεων(?:\s+\d+)?$/i.test(raw)) return "ΒRITISH SBA";
     return raw;
   }
   function showFeaturePopup(feature, lngLat) {
