@@ -65,13 +65,20 @@
       <input id="feature-name" maxlength="250" required>
       <label for="feature-color">Χρώμα</label>
       <input id="feature-color" type="color" value="#16a34a" aria-label="Feature color">
+      <section id="edit-point-coordinate-fields" class="hidden">
+        <p class="muted">Συντεταγμένες σημείου</p>
+        <label for="edit-point-latitude">Πλάτος (Latitude)</label>
+        <input id="edit-point-latitude" type="text" inputmode="decimal" data-coordinate="latitude" placeholder="35.185600">
+        <label for="edit-point-longitude">Μήκος (Longitude)</label>
+        <input id="edit-point-longitude" type="text" inputmode="decimal" data-coordinate="longitude" placeholder="33.382300">
+      </section>
       <section id="edit-polygon-coordinate-fields" class="hidden">
         <p class="muted">Συντεταγμένες κορυφών (πλάτος και μετά μήκος)</p>
         <div id="edit-polygon-coordinate-list"></div>
         <button type="button" id="edit-add-coordinate-row" class="button secondary">＋ Προσθήκη κορυφής</button>
       </section>
       <div class="dialog-actions">
-        <button id="feature-delete" type="button" class="button danger hidden">Delete feature</button>
+        <button id="feature-delete" type="button" class="button danger hidden">Διαγραφή στοιχείου</button>
         <button id="feature-save" type="submit" class="button primary">Αποθήκευση</button>
       </div>
       <p id="feature-error" class="error" role="alert"></p>
