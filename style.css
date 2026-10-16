@@ -311,3 +311,19 @@ body.sidebar-collapsed #map { width: 100% !important; }
   #editor-panel .button-stack { grid-template-columns:1fr; }
   .coordinate-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; }
 }
+
+/* CYMAP v18: consistent sidebar button alignment and editable polygon vertices */
+#editor-panel .button-stack .button {
+  text-align: left;
+  justify-content: flex-start;
+  padding-left: 14px;
+}
+#edit-polygon-coordinate-fields {
+  margin-top: 8px;
+}
+#edit-polygon-coordinate-fields .muted {
+  margin: 4px 0 8px;
+}
+#edit-polygon-coordinate-fields .coordinate-row {
+  margin: 8px 0;
+}
