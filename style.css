@@ -247,3 +247,50 @@ body.sidebar-collapsed #map { width: 100% !important; }
     right: -28px;
   }
 }
+
+/* CYMAP v16: keep the sidebar toggle aligned with the sidebar edge
+   and include its width in the layout so it never gets clipped. */
+@media (min-width: 761px) {
+  .app {
+    grid-template-columns: minmax(290px, max-content) minmax(0, 1fr);
+  }
+  .sidebar {
+    box-sizing: border-box;
+    width: max-content;
+    min-width: 290px;
+    max-width: min(460px, 48vw);
+    padding-right: 34px;
+    overflow: visible;
+  }
+  #sidebar-collapse {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    transform: translateY(-50%);
+    width: 24px;
+    min-width: 24px;
+    z-index: 1000;
+  }
+  body.sidebar-collapsed .app {
+    grid-template-columns: 0 minmax(0, 1fr) !important;
+  }
+  body.sidebar-collapsed #sidebar {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    overflow: visible !important;
+  }
+  body.sidebar-collapsed #sidebar-collapse {
+    right: -25px;
+  }
+  body.sidebar-collapsed .map-wrap {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  body.sidebar-collapsed #map {
+    width: 100% !important;
+  }
+}
