@@ -358,3 +358,11 @@ input[data-coordinate="longitude"]::-webkit-outer-spin-button {
 .vertex-coordinate-field label {
   margin: 0 !important;
 }
+
+/* CYMAP v20: editable point coordinates */
+#edit-point-coordinate-fields { margin-top: 8px; }
+#edit-point-coordinate-fields label {
+  display: block; margin: 8px 0 3px; font-size: 12px;
+  font-weight: 650; color: #344054;
+}
+#edit-point-coordinate-fields input { width: 100%; box-sizing: border-box; }
