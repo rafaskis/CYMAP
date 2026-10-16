@@ -327,3 +327,34 @@ body.sidebar-collapsed #map { width: 100% !important; }
 #edit-polygon-coordinate-fields .coordinate-row {
   margin: 8px 0;
 }
+
+/* CYMAP v19: clean coordinate fields */
+input[data-coordinate="latitude"],
+input[data-coordinate="longitude"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+input[data-coordinate="latitude"]::-webkit-inner-spin-button,
+input[data-coordinate="latitude"]::-webkit-outer-spin-button,
+input[data-coordinate="longitude"]::-webkit-inner-spin-button,
+input[data-coordinate="longitude"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.vertex-coordinate-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.vertex-number-label {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 750;
+  color: #344054;
+  margin-bottom: 1px;
+}
+.vertex-coordinate-field label {
+  margin: 0 !important;
+}
