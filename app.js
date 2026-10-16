@@ -468,6 +468,72 @@
     }
   }
 
+
+  function editablePolygonRing(geometry) {
+    if (!geometry) return null;
+    if (geometry.type === "Polygon") return geometry.coordinates?.[0] || null;
+    if (geometry.type === "MultiPolygon" && geometry.coordinates?.length === 1) {
+      return geometry.coordinates[0]?.[0] || null;
+    }
+    return null;
+  }
+
+  function addEditablePolygonRow(lat = "", lng = "") {
+    const list = $("edit-polygon-coordinate-list");
+    const index = list.children.length + 1;
+    const row = document.createElement("div");
+    row.className = "coordinate-row";
+    row.innerHTML = `
+      <div><label>Κορυφή ${index} — Πλάτος (Latitude)</label><input class="edit-vertex-lat" type="number" step="any" min="-90" max="90" required placeholder="35.1856" value="${escapeHtml(lat)}"></div>
+      <div><label>Μήκος (Longitude)</label><input class="edit-vertex-lng" type="number" step="any" min="-180" max="180" required placeholder="33.3823" value="${escapeHtml(lng)}"></div>
+      <button type="button" class="button secondary remove-coordinate-row" aria-label="Αφαίρεση κορυφής">×</button>`;
+    row.querySelector(".remove-coordinate-row").addEventListener("click", () => {
+      if (list.children.length <= 3) {
+        $("feature-error").textContent = "Το πολύγωνο πρέπει να έχει τουλάχιστον 3 κορυφές.";
+        return;
+      }
+      row.remove();
+      [...list.children].forEach((el, i) => {
+        el.querySelector("div:first-child label").textContent = `Κορυφή ${i + 1} — Πλάτος (Latitude)`;
+      });
+      $("feature-error").textContent = "";
+    });
+    list.appendChild(row);
+  }
+
+  function setupEditablePolygonCoordinates(feature) {
+    const section = $("edit-polygon-coordinate-fields");
+    const list = $("edit-polygon-coordinate-list");
+    list.innerHTML = "";
+    const ring = editablePolygonRing(feature.geometry);
+    // Editing coordinates is supported for Polygon and single-ring MultiPolygon geometry.
+    const supported = !!ring && (feature.geometry.type === "Polygon" ||
+      (feature.geometry.type === "MultiPolygon" && feature.geometry.coordinates.length === 1));
+    section.classList.toggle("hidden", !(feature.id && supported));
+    if (!feature.id || !supported) return;
+    const vertices = ring.slice(0, -1); // omit duplicate closing coordinate
+    vertices.forEach(([lng, lat]) => addEditablePolygonRow(lat, lng));
+  }
+
+  function readEditedPolygonGeometry(originalGeometry) {
+    const rows = [...$("edit-polygon-coordinate-list").querySelectorAll(".coordinate-row")];
+    if (rows.length < 3) throw new Error("Το πολύγωνο πρέπει να έχει τουλάχιστον 3 κορυφές.");
+    const ring = [];
+    for (const row of rows) {
+      const latValue = row.querySelector(".edit-vertex-lat").value;
+      const lngValue = row.querySelector(".edit-vertex-lng").value;
+      const lat = Number(latValue), lng = Number(lngValue);
+      if (latValue === "" || lngValue === "" || !Number.isFinite(lat) || !Number.isFinite(lng) ||
+          lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        throw new Error("Συμπληρώστε έγκυρο πλάτος και μήκος για κάθε κορυφή.");
+      }
+      ring.push([lng, lat]);
+    }
+    ring.push([...ring[0]]);
+    if (originalGeometry.type === "MultiPolygon") return { type: "MultiPolygon", coordinates: [[ring]] };
+    return { type: "Polygon", coordinates: [ring] };
+  }
+
   function openFeatureDialog(feature, allowDelete) {
     state.selectedFeature = feature;
     $("feature-heading").textContent = feature.id ? "Επεξεργασία στοιχείου" : "Νέο στοιχείο";
@@ -477,6 +543,7 @@
       ? feature.properties.color : (PERMANENT_LAYER_COLORS[additionalLayer()?.slug] || "#16a34a");
     $("feature-delete").classList.toggle("hidden", !(canModifyFeature(feature) && allowDelete && !!feature.id));
     $("feature-error").textContent = "";
+    setupEditablePolygonCoordinates(feature);
     featureDialog.showModal();
     setTimeout(() => $("feature-name").focus(), 0);
   }
@@ -488,6 +555,15 @@
     const name = $("feature-name").value.trim();
     const color = $("feature-color").value;
     $("feature-error").textContent = "";
+    let editedGeometry = feature.geometry;
+    if (feature.id && !$("edit-polygon-coordinate-fields").classList.contains("hidden")) {
+      try {
+        editedGeometry = readEditedPolygonGeometry(feature.geometry);
+      } catch (error) {
+        $("feature-error").textContent = error.message || "Ελέγξτε τις συντεταγμένες.";
+        return;
+      }
+    }
     if (!name) {
       $("feature-error").textContent = "Please enter a name.";
       $("feature-name").focus();
@@ -501,6 +577,7 @@
       const { data, error } = await state.supabase.from("map_features")
         .update({
           name_el: name, name_en: "",
+          geometry: editedGeometry,
           properties: { ...(feature.properties || {}), color },
           updated_at: new Date().toISOString()
         })
@@ -608,8 +685,8 @@
     const row = document.createElement("div");
     row.className = "coordinate-row";
     row.innerHTML = `
-      <div><label>Κορυφή ${index} — Μήκος</label><input class="vertex-lng" type="number" step="any" min="-180" max="180" required placeholder="33.3823"></div>
-      <div><label>Πλάτος</label><input class="vertex-lat" type="number" step="any" min="-90" max="90" required placeholder="35.1856"></div>
+      <div><label>Κορυφή ${index} — Πλάτος (Latitude)</label><input class="vertex-lat" type="number" step="any" min="-90" max="90" required placeholder="35.1856"></div>
+      <div><label>Μήκος (Longitude)</label><input class="vertex-lng" type="number" step="any" min="-180" max="180" required placeholder="33.3823"></div>
       <button type="button" class="button secondary remove-coordinate-row" aria-label="Αφαίρεση κορυφής">×</button>`;
     row.querySelector(".remove-coordinate-row").addEventListener("click", () => {
       if (list.children.length <= 3) {
@@ -717,6 +794,10 @@
   });
   $("feature-close").addEventListener("click", () => featureDialog.close());
   $("feature-form").addEventListener("submit", saveFeatureDetails);
+  $("edit-add-coordinate-row").addEventListener("click", () => {
+    addEditablePolygonRow();
+    $("feature-error").textContent = "";
+  });
   featureDialog.addEventListener("close", cancelUnsavedFeature);
   $("feature-delete").addEventListener("click", () => openDeleteDialog(state.selectedFeature, true));
   const deleteCancelButton = $("delete-cancel");
