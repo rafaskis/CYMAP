@@ -46,6 +46,16 @@
     return state.visibility[layerId] !== false;
   }
   function getLayer(id) { return state.layers.find(x => x.id === id); }
+
+  function displayLayerName(layer) {
+    if (!layer) return "";
+    if (layer.slug === "kd") return "ΚΥΠΡΙΑΚΗ ΔΗΜΟΚΡΑΤΙΑ";
+    if (layer.slug === "sba") return "British SBA";
+    if (layer.slug === "un") return "UN BUFFER ZONE";
+    return layer.name_el || layer.name_en || "";
+  }
+
+
   function getFeature(id) { return state.features.find(x => x.id === id); }
   function additionalLayer() { return state.layers.find(x => x.slug === "additional_data"); }
   function canModifyFeature(feature) {
@@ -296,7 +306,7 @@
       row.innerHTML = `
         <span class="layer-swatch" style="${swatchStyle}"></span>
         <input type="checkbox" aria-label="Toggle ${escapeHtml(layer.name_en || layer.name_el)}" ${checked ? "checked" : ""}>
-        <span class="layer-name"><strong>${escapeHtml(layer.name_el || layer.name_en)}</strong>${layer.slug === "additional_data" ? `<small>${featureCount} στοιχεία</small>` : ""}</span>`;
+        <span class="layer-name"><strong>${escapeHtml(displayLayerName(layer))}</strong>${layer.slug === "additional_data" ? `<small>${featureCount} στοιχεία</small>` : ""}</span>`;
       row.querySelector("input").addEventListener("change", (e) => {
         state.visibility[layer.id] = e.target.checked;
         saveVisibility();
@@ -409,9 +419,8 @@
     const popup = new maplibregl.Popup({ closeButton: true, maxWidth: "280px" })
       .setLngLat(lngLat)
       .setHTML(`<div class="popup-title">${escapeHtml(title)}</div>
-        ${canEdit ? `<div class="popup-actions"><button data-action="details">Rename / change color</button><button data-action="delete">Delete</button></div>` : ""}`)
+        ${canEdit ? `<div class="popup-actions"><button data-action="details">Αλλαγή</button><button data-action="delete">Διαγραφή</button></div>` : ""}`)
       .addTo(state.map);
-    state.featurePopup = popup;
     if (canEdit) {
       popup.getElement().querySelector('[data-action="details"]')
         ?.addEventListener("click", () => openFeatureDialog(feature, true));
@@ -485,13 +494,8 @@
     if (!canModifyFeature(feature) || !feature?.id) return;
     state.pendingDeleteFeature = feature;
     state.closeFeatureAfterDelete = !!fromFeatureDialog;
-    if (state.featurePopup) {
-      state.featurePopup.remove();
-      state.featurePopup = null;
-    }
     $("delete-feature-name").textContent = displayFeatureName(feature);
     $("delete-error").textContent = "";
-    if (featureDialog.open) featureDialog.close();
     $("delete-dialog").showModal();
   }
 
@@ -512,10 +516,6 @@
     }
     $("delete-dialog").close();
     if (featureDialog.open) featureDialog.close();
-    if (state.featurePopup) {
-      state.featurePopup.remove();
-      state.featurePopup = null;
-    }
     state.pendingDeleteFeature = null;
     state.selectedFeature = null;
     refreshAllSources();
@@ -562,5 +562,17 @@
   if (deleteConfirmButton) deleteConfirmButton.addEventListener("click", deleteFeature);
   $("draw-point").addEventListener("click", () => beginDraw("draw_point"));
   $("draw-polygon").addEventListener("click", () => beginDraw("draw_polygon"));
+
+  const sidebarCollapseButton = document.getElementById("sidebar-collapse");
+  if (sidebarCollapseButton) {
+    sidebarCollapseButton.addEventListener("click", () => {
+      const collapsed = document.body.classList.toggle("sidebar-collapsed");
+      sidebarCollapseButton.textContent = collapsed ? "▶" : "◀";
+      sidebarCollapseButton.setAttribute("aria-expanded", String(!collapsed));
+      sidebarCollapseButton.setAttribute("aria-label", collapsed ? "Επέκταση πλευρικής στήλης" : "Σύμπτυξη πλευρικής στήλης");
+      if (state.map) setTimeout(() => state.map.resize(), 220);
+    });
+  }
+
   init();
 })();
