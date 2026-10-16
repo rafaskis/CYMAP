@@ -424,7 +424,7 @@
 
   function openFeatureDialog(feature, allowDelete) {
     state.selectedFeature = feature;
-    $("feature-heading").textContent = feature.id ? "Edit feature" : "New feature";
+    $("feature-heading").textContent = feature.id ? "Επεξεργασία στοιχείου" : "Νέο στοιχείο";
     $("feature-id").value = feature.id || "";
     $("feature-name").value = feature.name_el || feature.name_en || "";
     $("feature-color").value = /^#[0-9a-f]{6}$/i.test(feature.properties?.color || "")
