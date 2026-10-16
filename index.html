@@ -82,7 +82,7 @@
 <dialog id="delete-dialog" class="feature-dialog">
     <form method="dialog" class="dialog-form">
       <h2>Διαγραφή στοιχείου</h2>
-      <p>Να διαγραφεί οριστικά το στοιχείο;</p>
+      
       <p id="delete-feature-name" class="delete-feature-name"></p>
       <p id="delete-error" class="form-error" role="alert"></p>
       <div class="dialog-actions">
@@ -103,9 +103,9 @@
       <input id="coordinate-color" type="color" value="#16a34a" required>
       <section id="point-coordinate-fields">
         <label for="point-latitude">Γεωγραφικό πλάτος (Latitude)</label>
-        <input id="point-latitude" type="number" step="any" min="-90" max="90" placeholder="π.χ. 35.1856" required>
+        <input id="point-latitude" type="text" inputmode="decimal" data-coordinate="latitude" placeholder="π.χ. 35.1856" required>
         <label for="point-longitude">Γεωγραφικό μήκος (Longitude)</label>
-        <input id="point-longitude" type="number" step="any" min="-180" max="180" placeholder="π.χ. 33.3823" required>
+        <input id="point-longitude" type="text" inputmode="decimal" data-coordinate="longitude" placeholder="π.χ. 33.3823" required>
       </section>
       <section id="polygon-coordinate-fields" class="hidden">
         <p class="muted">Καταχωρίστε τουλάχιστον 3 κορυφές. Οι συντεταγμένες δίνονται ως γεωγραφικό μήκος και πλάτος.</p>
