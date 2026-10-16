@@ -411,6 +411,7 @@
       .setHTML(`<div class="popup-title">${escapeHtml(title)}</div>
         ${canEdit ? `<div class="popup-actions"><button data-action="details">Rename / change color</button><button data-action="delete">Delete</button></div>` : ""}`)
       .addTo(state.map);
+    state.featurePopup = popup;
     if (canEdit) {
       popup.getElement().querySelector('[data-action="details"]')
         ?.addEventListener("click", () => openFeatureDialog(feature, true));
@@ -484,6 +485,10 @@
     if (!canModifyFeature(feature) || !feature?.id) return;
     state.pendingDeleteFeature = feature;
     state.closeFeatureAfterDelete = !!fromFeatureDialog;
+    if (state.featurePopup) {
+      state.featurePopup.remove();
+      state.featurePopup = null;
+    }
     $("delete-feature-name").textContent = displayFeatureName(feature);
     $("delete-error").textContent = "";
     if (featureDialog.open) featureDialog.close();
@@ -507,6 +512,10 @@
     }
     $("delete-dialog").close();
     if (featureDialog.open) featureDialog.close();
+    if (state.featurePopup) {
+      state.featurePopup.remove();
+      state.featurePopup = null;
+    }
     state.pendingDeleteFeature = null;
     state.selectedFeature = null;
     refreshAllSources();
