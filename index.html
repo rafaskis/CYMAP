@@ -32,8 +32,8 @@
         <div class="button-stack">
           <button id="draw-point" class="button primary">＋ Προσθήκη σημείου</button>
           <button id="draw-polygon" class="button primary">＋ Προσθήκη πολυγώνου</button>
-          <button id="coordinate-point" class="button secondary">Προσθήκη σημείου με συντεταγμένες</button>
-          <button id="coordinate-polygon" class="button secondary">Προσθήκη πολυγώνου με συντεταγμένες</button>
+          <button id="coordinate-point" class="button secondary">＋ Προσθήκη σημείου με συντεταγμένες</button>
+          <button id="coordinate-polygon" class="button secondary">＋ Προσθήκη πολυγώνου με συντεταγμένες</button>
         </div>
         
       </section>
@@ -65,6 +65,11 @@
       <input id="feature-name" maxlength="250" required>
       <label for="feature-color">Χρώμα</label>
       <input id="feature-color" type="color" value="#16a34a" aria-label="Feature color">
+      <section id="edit-polygon-coordinate-fields" class="hidden">
+        <p class="muted">Συντεταγμένες κορυφών (πλάτος και μετά μήκος)</p>
+        <div id="edit-polygon-coordinate-list"></div>
+        <button type="button" id="edit-add-coordinate-row" class="button secondary">＋ Προσθήκη κορυφής</button>
+      </section>
       <div class="dialog-actions">
         <button id="feature-delete" type="button" class="button danger hidden">Delete feature</button>
         <button id="feature-save" type="submit" class="button primary">Αποθήκευση</button>
@@ -97,10 +102,10 @@
       <label for="coordinate-color">Χρώμα</label>
       <input id="coordinate-color" type="color" value="#16a34a" required>
       <section id="point-coordinate-fields">
-        <label for="point-longitude">Γεωγραφικό μήκος (Longitude)</label>
-        <input id="point-longitude" type="number" step="any" min="-180" max="180" placeholder="π.χ. 33.3823" required>
         <label for="point-latitude">Γεωγραφικό πλάτος (Latitude)</label>
         <input id="point-latitude" type="number" step="any" min="-90" max="90" placeholder="π.χ. 35.1856" required>
+        <label for="point-longitude">Γεωγραφικό μήκος (Longitude)</label>
+        <input id="point-longitude" type="number" step="any" min="-180" max="180" placeholder="π.χ. 33.3823" required>
       </section>
       <section id="polygon-coordinate-fields" class="hidden">
         <p class="muted">Καταχωρίστε τουλάχιστον 3 κορυφές. Οι συντεταγμένες δίνονται ως γεωγραφικό μήκος και πλάτος.</p>
