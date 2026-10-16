@@ -160,3 +160,75 @@ body.sidebar-collapsed #sidebar {
 body.sidebar-collapsed #sidebar > *:not(#sidebar-collapse) { display: none !important; }
 body.sidebar-collapsed #sidebar-collapse { right: -28px; }
 body.sidebar-collapsed #map { width: 100% !important; }
+
+/* CYMAP v13 responsive sidebar sizing */
+@media (min-width: 761px) {
+  .app {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+  .sidebar {
+    width: max-content;
+    min-width: 250px;
+    max-width: min(430px, 45vw);
+  }
+  .layers {
+    width: 100%;
+  }
+  .layer-row {
+    width: 100%;
+  }
+  .layer-name {
+    min-width: max-content;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .layer-name strong {
+    white-space: nowrap;
+  }
+  body.sidebar-collapsed .app {
+    grid-template-columns: 0 minmax(0, 1fr) !important;
+  }
+  body.sidebar-collapsed #sidebar {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  body.sidebar-collapsed .map-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+}
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .sidebar {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .layer-name {
+    white-space: normal;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  body.sidebar-collapsed .app {
+    grid-template-rows: 0 minmax(0, 1fr) !important;
+  }
+  body.sidebar-collapsed #sidebar {
+    height: 0 !important;
+    max-height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  body.sidebar-collapsed #sidebar-collapse {
+    top: 12px;
+    right: 10px;
+    transform: none;
+  }
+}
