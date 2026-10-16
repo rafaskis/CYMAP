@@ -427,7 +427,7 @@
     if (!geometry) return "";
     if (geometry.type === "Point") {
       const [lng, lat] = geometry.coordinates;
-      return `Συντεταγμένες: ${formatCoord(lat)}, ${formatCoord(lng)} (πλάτος, μήκος)`;
+      return `Συντεταγμένες: ${formatCoord(lat)}, ${formatCoord(lng)}`;
     }
     if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
       const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
@@ -484,8 +484,8 @@
     const row = document.createElement("div");
     row.className = "coordinate-row";
     row.innerHTML = `
-      <div><label>Κορυφή ${index} — Πλάτος (Latitude)</label><input class="edit-vertex-lat" type="number" step="any" min="-90" max="90" required placeholder="35.1856" value="${escapeHtml(lat)}"></div>
-      <div><label>Μήκος (Longitude)</label><input class="edit-vertex-lng" type="number" step="any" min="-180" max="180" required placeholder="33.3823" value="${escapeHtml(lng)}"></div>
+      <div class="vertex-coordinate-field"><span class="vertex-number-label">Κορυφή ${index}</span><label>Πλάτος (Latitude)</label><input class="edit-vertex-lat" type="text" inputmode="decimal" data-coordinate="latitude" required placeholder="35.1856" value="${escapeHtml(lat)}"></div>
+      <div class="vertex-coordinate-field"><label>Μήκος (Longitude)</label><input class="edit-vertex-lng" type="text" inputmode="decimal" data-coordinate="longitude" required placeholder="33.3823" value="${escapeHtml(lng)}"></div>
       <button type="button" class="button secondary remove-coordinate-row" aria-label="Αφαίρεση κορυφής">×</button>`;
     row.querySelector(".remove-coordinate-row").addEventListener("click", () => {
       if (list.children.length <= 3) {
@@ -494,7 +494,7 @@
       }
       row.remove();
       [...list.children].forEach((el, i) => {
-        el.querySelector("div:first-child label").textContent = `Κορυφή ${i + 1} — Πλάτος (Latitude)`;
+        el.querySelector(".vertex-number-label").textContent = `Κορυφή ${i + 1}`;
       });
       $("feature-error").textContent = "";
     });
@@ -512,7 +512,7 @@
     section.classList.toggle("hidden", !(feature.id && supported));
     if (!feature.id || !supported) return;
     const vertices = ring.slice(0, -1); // omit duplicate closing coordinate
-    vertices.forEach(([lng, lat]) => addEditablePolygonRow(lat, lng));
+    vertices.forEach(([lng, lat]) => addEditablePolygonRow(Number(lat).toFixed(6), Number(lng).toFixed(6)));
   }
 
   function readEditedPolygonGeometry(originalGeometry) {
@@ -522,7 +522,7 @@
     for (const row of rows) {
       const latValue = row.querySelector(".edit-vertex-lat").value;
       const lngValue = row.querySelector(".edit-vertex-lng").value;
-      const lat = Number(latValue), lng = Number(lngValue);
+      const lat = Number(latValue.trim().replace(",", ".")), lng = Number(lngValue.trim().replace(",", "."));
       if (latValue === "" || lngValue === "" || !Number.isFinite(lat) || !Number.isFinite(lng) ||
           lat < -90 || lat > 90 || lng < -180 || lng > 180) {
         throw new Error("Συμπληρώστε έγκυρο πλάτος και μήκος για κάθε κορυφή.");
@@ -685,8 +685,8 @@
     const row = document.createElement("div");
     row.className = "coordinate-row";
     row.innerHTML = `
-      <div><label>Κορυφή ${index} — Πλάτος (Latitude)</label><input class="vertex-lat" type="number" step="any" min="-90" max="90" required placeholder="35.1856"></div>
-      <div><label>Μήκος (Longitude)</label><input class="vertex-lng" type="number" step="any" min="-180" max="180" required placeholder="33.3823"></div>
+      <div class="vertex-coordinate-field"><span class="vertex-number-label">Κορυφή ${index}</span><label>Πλάτος (Latitude)</label><input class="vertex-lat" type="text" inputmode="decimal" data-coordinate="latitude" required placeholder="35.1856"></div>
+      <div class="vertex-coordinate-field"><label>Μήκος (Longitude)</label><input class="vertex-lng" type="text" inputmode="decimal" data-coordinate="longitude" required placeholder="33.3823"></div>
       <button type="button" class="button secondary remove-coordinate-row" aria-label="Αφαίρεση κορυφής">×</button>`;
     row.querySelector(".remove-coordinate-row").addEventListener("click", () => {
       if (list.children.length <= 3) {
