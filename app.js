@@ -170,6 +170,7 @@
 
   function initMap() {
     state.map = new maplibregl.Map({
+      attributionControl: { compact: true },
       container: "map",
       center: cfg.MAP_CENTER || [33.2, 35.1],
       zoom: cfg.MAP_ZOOM || 8,
