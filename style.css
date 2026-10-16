@@ -98,3 +98,7 @@ button, input, select, textarea { font-size: 0.96rem; }
 #login-form .button.full { margin-top:16px; }
 #brand-logo { display:block; width:38px; height:38px; object-fit:contain; flex:0 0 38px; }
 .brand-mark { display:none !important; }
+
+/* Keep the attribution panel compact initially; the info button expands it on demand. */
+.maplibregl-ctrl-attrib:not(.maplibregl-compact) { max-width: 42px; }
+.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button { display: block; }
