@@ -19,7 +19,8 @@
   </header>
 
   <main class="app">
-    <aside class="sidebar">
+    <aside id="sidebar" class="sidebar">
+  <button id="sidebar-collapse" class="sidebar-collapse" type="button" aria-label="Σύμπτυξη πλευρικής στήλης" aria-expanded="true">◀</button>
       <div class="side-heading"><div><h1></h1><p></p></div></div>
       <div id="layers" class="layers"><div class="empty">Loading layers…</div></div>
       
@@ -74,7 +75,7 @@
 <dialog id="delete-dialog" class="feature-dialog">
     <form method="dialog" class="dialog-form">
       <h2>Διαγραφή στοιχείου</h2>
-      
+      <p>Να διαγραφεί οριστικά το στοιχείο;</p>
       <p id="delete-feature-name" class="delete-feature-name"></p>
       <p id="delete-error" class="form-error" role="alert"></p>
       <div class="dialog-actions">
