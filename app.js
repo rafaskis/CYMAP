@@ -501,6 +501,29 @@
     list.appendChild(row);
   }
 
+
+  function setupEditablePointCoordinates(feature) {
+    const section = $("edit-point-coordinate-fields");
+    const supported = !!feature.id && feature.geometry?.type === "Point";
+    section.classList.toggle("hidden", !supported);
+    if (!supported) return;
+    const [lng, lat] = feature.geometry.coordinates;
+    $("edit-point-latitude").value = Number(lat).toFixed(6);
+    $("edit-point-longitude").value = Number(lng).toFixed(6);
+  }
+
+  function readEditedPointGeometry() {
+    const latText = $("edit-point-latitude").value.trim();
+    const lngText = $("edit-point-longitude").value.trim();
+    const lat = Number(latText.replace(",", "."));
+    const lng = Number(lngText.replace(",", "."));
+    if (!latText || !lngText || !Number.isFinite(lat) || !Number.isFinite(lng) ||
+        lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new Error("Συμπληρώστε έγκυρο πλάτος (-90 έως 90) και μήκος (-180 έως 180).");
+    }
+    return { type: "Point", coordinates: [Number(lng.toFixed(6)), Number(lat.toFixed(6))] };
+  }
+
   function setupEditablePolygonCoordinates(feature) {
     const section = $("edit-polygon-coordinate-fields");
     const list = $("edit-polygon-coordinate-list");
@@ -543,6 +566,7 @@
       ? feature.properties.color : (PERMANENT_LAYER_COLORS[additionalLayer()?.slug] || "#16a34a");
     $("feature-delete").classList.toggle("hidden", !(canModifyFeature(feature) && allowDelete && !!feature.id));
     $("feature-error").textContent = "";
+    setupEditablePointCoordinates(feature);
     setupEditablePolygonCoordinates(feature);
     featureDialog.showModal();
     setTimeout(() => $("feature-name").focus(), 0);
@@ -556,13 +580,15 @@
     const color = $("feature-color").value;
     $("feature-error").textContent = "";
     let editedGeometry = feature.geometry;
-    if (feature.id && !$("edit-polygon-coordinate-fields").classList.contains("hidden")) {
-      try {
+    try {
+      if (feature.id && !$("edit-point-coordinate-fields").classList.contains("hidden")) {
+        editedGeometry = readEditedPointGeometry();
+      } else if (feature.id && !$("edit-polygon-coordinate-fields").classList.contains("hidden")) {
         editedGeometry = readEditedPolygonGeometry(feature.geometry);
-      } catch (error) {
-        $("feature-error").textContent = error.message || "Ελέγξτε τις συντεταγμένες.";
-        return;
       }
+    } catch (error) {
+      $("feature-error").textContent = error.message || "Ελέγξτε τις συντεταγμένες.";
+      return;
     }
     if (!name) {
       $("feature-error").textContent = "Please enter a name.";
