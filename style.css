@@ -143,3 +143,20 @@ button, input, select, textarea { font-size: 0.96rem; }
   gap: 8px;
   margin-top: 12px;
 }
+
+/* CYMAP collapsible sidebar */
+#sidebar { position: relative; transition: width .2s ease, min-width .2s ease, padding .2s ease; }
+#sidebar-collapse {
+  position: absolute; top: 50%; right: -13px; transform: translateY(-50%);
+  z-index: 50; width: 26px; height: 48px; padding: 0;
+  border: 1px solid #cbd5e1; border-radius: 0 8px 8px 0;
+  background: #fff; color: #344054; font-size: 15px; font-weight: 800;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(16,24,40,.12);
+}
+body.sidebar-collapsed #sidebar {
+  width: 0 !important; min-width: 0 !important; padding-left: 0 !important;
+  padding-right: 0 !important; border: 0 !important; overflow: visible !important;
+}
+body.sidebar-collapsed #sidebar > *:not(#sidebar-collapse) { display: none !important; }
+body.sidebar-collapsed #sidebar-collapse { right: -28px; }
+body.sidebar-collapsed #map { width: 100% !important; }
