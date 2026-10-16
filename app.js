@@ -175,7 +175,6 @@
       zoom: cfg.MAP_ZOOM || 8,
       style: "https://tiles.openfreemap.org/styles/liberty"
     });
-    state.map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     state.map.addControl(new maplibregl.NavigationControl(), "top-right");
     state.map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     state.map.on("load", () => {
