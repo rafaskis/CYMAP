@@ -102,3 +102,24 @@ button, input, select, textarea { font-size: 0.96rem; }
 /* Keep the attribution panel compact initially; the info button expands it on demand. */
 .maplibregl-ctrl-attrib:not(.maplibregl-compact) { max-width: 42px; }
 .maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button { display: block; }
+
+/* Single built-in MapLibre attribution control, collapsed by default */
+.maplibregl-ctrl-attrib {
+  max-width: 40px !important;
+  overflow: hidden;
+}
+.maplibregl-ctrl-attrib:not(.maplibregl-compact) {
+  max-width: 40px !important;
+}
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  min-height: 22px;
+}
+.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button {
+  display: block !important;
+}
+.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-inner {
+  display: none;
+}
+.maplibregl-ctrl-attrib.maplibregl-compact.maplibregl-ctrl-attrib-show .maplibregl-ctrl-attrib-inner {
+  display: block;
+}
