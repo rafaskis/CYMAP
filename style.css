@@ -294,3 +294,20 @@ body.sidebar-collapsed #map { width: 100% !important; }
     width: 100% !important;
   }
 }
+
+/* CYMAP v17: coordinate-entry controls and forms */
+#editor-panel .button-stack { grid-template-columns: 1fr; }
+#coordinate-dialog { max-height: min(88vh, 850px); overflow-y: auto; }
+#coordinate-form { display:flex; flex-direction:column; gap:5px; }
+#coordinate-form label { display:block; margin:8px 0 3px; font-size:12px; font-weight:650; color:#344054; }
+#coordinate-form input:not([type="color"]) { width:100%; min-width:0; }
+#coordinate-form input[type="color"] { display:block; width:100%; height:40px; padding:3px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
+.coordinate-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:6px; align-items:end; padding:8px; border:1px solid #e2e8f0; border-radius:8px; margin:8px 0; }
+.coordinate-row label { margin-top:0!important; }
+.coordinate-row input { padding:8px!important; }
+.coordinate-row .remove-coordinate-row { height:36px; padding:6px 9px; }
+.coordinate-summary { margin-top:7px; padding:7px 8px; border-radius:7px; background:#f8fafc; color:#344054; font-size:11px; line-height:1.4; overflow-wrap:anywhere; }
+@media(max-width:760px) {
+  #editor-panel .button-stack { grid-template-columns:1fr; }
+  .coordinate-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; }
+}
