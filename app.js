@@ -317,8 +317,76 @@
         setMapLayerVisibility(layer);
       });
       layersEl.appendChild(row);
+      if (layer.slug === "additional_data") {
+        const items = state.features
+          .filter(f => f.layer_id === layer.id)
+          .slice()
+          .sort((a, b) => displayFeatureName(a).localeCompare(displayFeatureName(b), "el"));
+        const list = document.createElement("div");
+        list.className = "additional-feature-list";
+        list.setAttribute("aria-label", "Στοιχεία στα Επιπρόσθετα Δεδομένα");
+        if (!items.length) {
+          list.innerHTML = '<div class="additional-feature-empty">Δεν υπάρχουν στοιχεία ακόμη</div>';
+        } else {
+          for (const feature of items) {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "additional-feature-item";
+            item.title = "Κεντράρισμα στον χάρτη";
+            item.innerHTML = `<span class="additional-feature-dot" style="background:${escapeHtml(featureColor(feature))}"></span><span class="additional-feature-name">${escapeHtml(displayFeatureName(feature))}</span>`;
+            item.addEventListener("click", () => centerOnFeature(feature));
+            list.appendChild(item);
+          }
+        }
+        layersEl.appendChild(list);
+      }
     }
   }
+
+  function centerOnFeature(feature) {
+    if (!state.map || !feature?.geometry) return;
+    const layer = getLayer(feature.layer_id);
+    if (layer && !layerVisible(layer.id)) {
+      state.visibility[layer.id] = true;
+      saveVisibility();
+      setMapLayerVisibility(layer);
+      renderLayers();
+    }
+
+    const geometry = feature.geometry;
+    if (geometry.type === "Point") {
+      const [lng, lat] = geometry.coordinates;
+      state.map.flyTo({ center: [lng, lat], zoom: Math.max(state.map.getZoom(), 13), essential: true });
+      return;
+    }
+
+    const coordinates = [];
+    const collect = value => {
+      if (Array.isArray(value) && value.length >= 2 &&
+          typeof value[0] === "number" && typeof value[1] === "number") {
+        coordinates.push(value);
+      } else if (Array.isArray(value)) {
+        value.forEach(collect);
+      }
+    };
+    collect(geometry.coordinates);
+    if (!coordinates.length) return;
+    let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+    for (const [lng, lat] of coordinates) {
+      west = Math.min(west, lng); south = Math.min(south, lat);
+      east = Math.max(east, lng); north = Math.max(north, lat);
+    }
+    if (west === east && south === north) {
+      state.map.flyTo({ center: [west, south], zoom: Math.max(state.map.getZoom(), 12), essential: true });
+    } else {
+      state.map.fitBounds([[west, south], [east, north]], {
+        padding: { top: 80, right: 80, bottom: 80, left: 80 },
+        maxZoom: 12,
+        duration: 900
+      });
+    }
+  }
+
   function renderLayerSelect() {
     if (layerSelect) layerSelect.innerHTML = "";
     // The target layer is fixed by design; no user-facing layer selection.
