@@ -103,8 +103,10 @@
       await loadLayersAndFeatures();
       state.supabase.auth.onAuthStateChange((_event, session) => {
         setTimeout(async () => {
-          if (session?.user) await applySession(session.user);
-          else clearSession();
+          if (session?.user) {
+            await applySession(session.user);
+            await loadLayersAndFeatures();
+          } else clearSession();
         }, 0);
       });
       setStatus(state.isEditor ? (state.user?.email?.split("@")[0] || "") : "");
@@ -221,7 +223,13 @@
     if (layersResult.error) throw layersResult.error;
     if (featuresResult.error) throw featuresResult.error;
     state.layers = layersResult.data || [];
-    state.features = featuresResult.data || [];
+    // Keep all permanent-layer features, but only show additional_data records
+    // owned by the currently signed-in Supabase user.
+    state.features = (featuresResult.data || []).filter(feature => {
+      const layer = state.layers.find(item => item.id === feature.layer_id);
+      if (layer?.slug !== "additional_data") return true;
+      return !!state.user && feature.owner_id === state.user.id;
+    });
     state.additionalLayerId = additionalLayer()?.id || null;
     if (!state.additionalLayerId) {
       throw new Error('Missing layer "ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ". Run the CYMAP protection migration SQL.');
@@ -393,6 +401,14 @@
   }
 
   async function applySession(user) {
+    const previousUserId = state.user?.id || null;
+    if (previousUserId && previousUserId !== user.id) {
+      // Do not leave the previous account's personal features in the map cache.
+      state.features = state.features.filter(feature =>
+        getLayer(feature.layer_id)?.slug !== "additional_data"
+      );
+      refreshAllSources();
+    }
     state.user = user;
     const { data, error } = await state.supabase.from("map_editors")
       .select("user_id").eq("user_id", user.id).maybeSingle();
@@ -410,10 +426,20 @@
   function clearSession() {
     state.user = null;
     state.isEditor = false;
+    // Remove personal data from memory and redraw immediately on logout.
+    state.features = state.features.filter(feature =>
+      getLayer(feature.layer_id)?.slug !== "additional_data"
+    );
+    if (state.selectedFeature && getLayer(state.selectedFeature.layer_id)?.slug === "additional_data") {
+      state.selectedFeature = null;
+    }
+    state.pendingDeleteFeature = null;
+    if (state.map) document.querySelectorAll(".maplibregl-popup").forEach(el => el.remove());
     $("editor-panel").classList.add("hidden");
     $("login-open").classList.remove("hidden");
     $("logout").classList.add("hidden");
     renderLayers();
+    refreshAllSources();
     setStatus("");
     if (state.draw) {
       try { state.map.removeControl(state.draw); } catch {}
@@ -683,6 +709,7 @@
     } else {
       const row = {
         layer_id: state.additionalLayerId,
+        owner_id: state.user.id,
         name_el: name, name_en: "",
         geometry: feature.geometry,
         properties: { color }
@@ -842,6 +869,7 @@
     $("coordinate-error").textContent = "";
     const { data, error } = await state.supabase.from("map_features").insert({
       layer_id: state.additionalLayerId,
+      owner_id: state.user.id,
       name_el: name, name_en: "",
       geometry,
       properties: { color }
@@ -884,7 +912,6 @@
     if (error) { $("login-error").textContent = "Sign-in failed. Check username and password."; return; }
     loginDialog.close();
     $("password").value = "";
-    await loadLayersAndFeatures();
   });
   $("feature-close").addEventListener("click", () => featureDialog.close());
   $("feature-form").addEventListener("submit", saveFeatureDetails);
