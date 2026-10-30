@@ -167,6 +167,7 @@
         type: "raster",
         tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
         tileSize: 256,
+        maxzoom: 19,
         attribution: "Satellite imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community"
       });
     }
