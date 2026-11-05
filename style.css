@@ -423,6 +423,7 @@ input[data-coordinate="longitude"]::-webkit-outer-spin-button {
 
 
 /* CYMAP: live zoom and satellite-imagery fallback diagnostics */
+.map-zoom-info { display: none !important; }
 .map-zoom-info {
   position: absolute;
   top: 12px;
