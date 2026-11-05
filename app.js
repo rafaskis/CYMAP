@@ -9,6 +9,23 @@
   const featureDialog = $("feature-dialog");
   const layerVisibilityKey = "cymap.layerVisibility.v1";
 
+  // Adaptive Esri imagery zoom: native imagery is capped at z19, with up to
+  // 4x local enlargement (two additional map zoom levels).
+  const ESRI_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
+  const ESRI_MAX_NATIVE_ZOOM = 19;
+  const MAX_LOCAL_TILE_SCALE = 4;
+  const MAX_LOCAL_ZOOM_STEPS = Math.log2(MAX_LOCAL_TILE_SCALE);
+  const MAP_MAX_ZOOM = ESRI_MAX_NATIVE_ZOOM + MAX_LOCAL_ZOOM_STEPS;
+  let adaptiveZoomCheckId = 0;
+  const TILEMAP_BLOCK_SIZE = 8;
+  const tileAvailabilityCache = new Map();
+  const tileAvailabilityRequests = new Map();
+  const imageryTileCache = new Map();
+  const imageryTileStatus = new Map();
+  const MAX_TILE_CACHE_ENTRIES = 450;
+  let zoomInfoUpdate = null;
+
+
   // These five colors are fixed by the CYMAP maintainers, not user-editable.
   // To redesign the permanent layers, change this palette and redeploy the site.
   const PERMANENT_LAYER_COLORS = Object.freeze({
@@ -81,6 +98,265 @@
   }
   function sourceId(layerId) { return `features-${layerId}`; }
   function safeLayerSlug(slug) { return String(slug).replace(/[^a-zA-Z0-9_-]/g, "_"); }
+
+  function tileKey(z, x, y) { return `${z}/${x}/${y}`; }
+  function trimMapCache(cache, maxEntries = MAX_TILE_CACHE_ENTRIES) {
+    while (cache.size > maxEntries) cache.delete(cache.keys().next().value);
+  }
+  function parseTileLocation(location, fallbackX, fallbackY, fallbackWidth, fallbackHeight) {
+    if (location && typeof location === "object") {
+      return {
+        x: Number(location.left ?? fallbackX), y: Number(location.top ?? fallbackY),
+        width: Number(location.width ?? fallbackWidth), height: Number(location.height ?? fallbackHeight)
+      };
+    }
+    if (typeof location === "string") {
+      const values = location.split(",").map(Number);
+      if (values.length === 4 && values.every(Number.isFinite)) {
+        return { x: values[0], y: values[1], width: values[2], height: values[3] };
+      }
+    }
+    return { x: fallbackX, y: fallbackY, width: fallbackWidth, height: fallbackHeight };
+  }
+
+  async function fetchTilemapBlock(z, x, y, signal) {
+    const size = TILEMAP_BLOCK_SIZE;
+    const left = Math.floor(x / size) * size;
+    const top = Math.floor(y / size) * size;
+    const requestKey = `${z}/${left}/${top}/${size}`;
+    if (tileAvailabilityRequests.has(requestKey)) return tileAvailabilityRequests.get(requestKey);
+
+    const request = (async () => {
+      try {
+        const url = `${ESRI_TILE_URL}/tilemap/${z}/${top}/${left}/${size}/${size}?f=json`;
+        const response = await fetch(url, { signal, mode: "cors", credentials: "omit" });
+        if (!response.ok) return false;
+        const result = await response.json();
+        if (!Array.isArray(result.data)) return false;
+        const area = parseTileLocation(result.location, left, top, size, size);
+        for (let row = 0; row < area.height; row++) {
+          for (let col = 0; col < area.width; col++) {
+            const index = row * area.width + col;
+            const key = tileKey(z, area.x + col, area.y + row);
+            tileAvailabilityCache.set(key, result.data[index] === 1);
+          }
+        }
+        trimMapCache(tileAvailabilityCache, 6000);
+        return true;
+      } catch (error) {
+        if (error?.name === "AbortError") throw error;
+        console.warn("Esri tile availability check failed; trying the tile directly.", error);
+        return false;
+      } finally {
+        tileAvailabilityRequests.delete(requestKey);
+      }
+    })();
+    tileAvailabilityRequests.set(requestKey, request);
+    return request;
+  }
+
+  async function isEsriTileAvailable(z, x, y, signal) {
+    if (z < 0 || z > ESRI_MAX_NATIVE_ZOOM) return false;
+    const key = tileKey(z, x, y);
+    if (tileAvailabilityCache.has(key)) return tileAvailabilityCache.get(key);
+    await fetchTilemapBlock(z, x, y, signal);
+    if (tileAvailabilityCache.has(key)) return tileAvailabilityCache.get(key);
+
+    // A bundle-boundary adjustment can omit the requested tile; retry precisely.
+    try {
+      const response = await fetch(`${ESRI_TILE_URL}/tilemap/${z}/${y}/${x}/1/1?f=json`, {
+        signal, mode: "cors", credentials: "omit"
+      });
+      if (!response.ok) {
+        tileAvailabilityCache.set(key, false);
+        return false;
+      }
+      const result = await response.json();
+      const available = Array.isArray(result.data) && result.data[0] === 1;
+      tileAvailabilityCache.set(key, available);
+      return available;
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      // null means unknown: the protocol will try a direct tile request.
+      return null;
+    }
+  }
+
+  async function fetchEsriTile(z, x, y, signal) {
+    const key = tileKey(z, x, y);
+    if (imageryTileCache.has(key)) return imageryTileCache.get(key).slice(0);
+    try {
+      const response = await fetch(`${ESRI_TILE_URL}/tile/${z}/${y}/${x}`, {
+        signal, mode: "cors", credentials: "omit"
+      });
+      if (!response.ok) return null;
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.toLowerCase().includes("image/")) return null;
+      const data = await response.arrayBuffer();
+      imageryTileCache.set(key, data.slice(0));
+      trimMapCache(imageryTileCache);
+      return data;
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      return null;
+    }
+  }
+
+  async function cropParentTile(parentBytes, childX, childY, zoomDifference) {
+    const bitmap = await createImageBitmap(new Blob([parentBytes]));
+    try {
+      const factor = 2 ** zoomDifference;
+      const cropSize = 256 / factor;
+      const sx = (childX % factor) * cropSize;
+      const sy = (childY % factor) * cropSize;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 256;
+      const context = canvas.getContext("2d", { alpha: false });
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.drawImage(bitmap, sx, sy, cropSize, cropSize, 0, 0, 256, 256);
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(result => result ? resolve(result) : reject(new Error("Could not create fallback tile")), "image/jpeg", 0.92);
+      });
+      return await blob.arrayBuffer();
+    } finally {
+      bitmap.close?.();
+    }
+  }
+
+  async function makeTransparentTile() {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 256;
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    return blob ? blob.arrayBuffer() : new ArrayBuffer(0);
+  }
+
+  function recordImageryTileStatus(requestedZ, requestedX, requestedY, sourceZ) {
+    imageryTileStatus.set(tileKey(requestedZ, requestedX, requestedY), sourceZ);
+    trimMapCache(imageryTileStatus, 3000);
+    zoomInfoUpdate?.();
+  }
+
+  async function loadEsriTileWithFallback(z, x, y, signal) {
+    const requestedKey = tileKey(z, x, y);
+    if (imageryTileCache.has(`rendered:${requestedKey}`)) return imageryTileCache.get(`rendered:${requestedKey}`).slice(0);
+
+    const highestCandidate = Math.min(z, ESRI_MAX_NATIVE_ZOOM);
+    // The map's adaptive maxZoom is set from the best native imagery at its
+    // centre. This per-tile fallback also refuses parent imagery that would
+    // require more than 4x enlargement at the current fractional zoom.
+    const liveZoom = state.map ? state.map.getZoom() : z;
+    const lowestCandidate = Math.max(
+      0,
+      Math.ceil(liveZoom - Math.log2(MAX_LOCAL_TILE_SCALE) - 1e-9)
+    );
+
+    for (let sourceZ = highestCandidate; sourceZ >= lowestCandidate; sourceZ--) {
+      const difference = z - sourceZ;
+      const factor = 2 ** difference;
+      const sourceX = Math.floor(x / factor);
+      const sourceY = Math.floor(y / factor);
+      const availability = await isEsriTileAvailable(sourceZ, sourceX, sourceY, signal);
+      if (availability === false) continue;
+
+      const sourceBytes = await fetchEsriTile(sourceZ, sourceX, sourceY, signal);
+      if (!sourceBytes) continue;
+      const renderedBytes = difference === 0
+        ? sourceBytes
+        : await cropParentTile(sourceBytes, x, y, difference);
+      recordImageryTileStatus(z, x, y, sourceZ);
+      imageryTileCache.set(`rendered:${requestedKey}`, renderedBytes.slice(0));
+      trimMapCache(imageryTileCache);
+      return renderedBytes;
+    }
+
+    // Never pass Esri's text placeholder through to MapLibre. If no source tile
+    // exists within the 4x limit, return a transparent tile instead.
+    recordImageryTileStatus(z, x, y, null);
+    const emptyTile = await makeTransparentTile();
+    imageryTileCache.set(`rendered:${requestedKey}`, emptyTile.slice(0));
+    trimMapCache(imageryTileCache);
+    return emptyTile;
+  }
+
+  function installEsriFallbackProtocol() {
+    if (window.__cymapEsriProtocolInstalled) return;
+    maplibregl.addProtocol("cymap-esri", async (params, abortController) => {
+      const match = params.url.match(/^cymap-esri:\/\/(\d+)\/(\d+)\/(\d+)$/);
+      if (!match) throw new Error(`Invalid CYMAP imagery tile URL: ${params.url}`);
+      const z = Number(match[1]), x = Number(match[2]), y = Number(match[3]);
+      const data = await loadEsriTileWithFallback(z, x, y, abortController?.signal);
+      return { data };
+    });
+    window.__cymapEsriProtocolInstalled = true;
+  }
+
+  async function updateAdaptiveMaxZoom() {
+    if (!state.map) return;
+    const checkId = ++adaptiveZoomCheckId;
+    const center = state.map.getCenter();
+    const z = ESRI_MAX_NATIVE_ZOOM;
+    const n = 2 ** z;
+    const latitude = Math.max(-85.05112878, Math.min(85.05112878, center.lat));
+    const latRad = latitude * Math.PI / 180;
+    const x = Math.max(0, Math.min(n - 1, Math.floor((center.lng + 180) / 360 * n)));
+    const y = Math.max(0, Math.min(n - 1, Math.floor((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2 * n)));
+
+    // Find the highest native Esri tile available for the map-centre location.
+    // If z19 is absent here, test its parent at z18, then z17, and so on.
+    for (let sourceZ = ESRI_MAX_NATIVE_ZOOM; sourceZ >= 0; sourceZ--) {
+      if (checkId !== adaptiveZoomCheckId) return; // a newer pan/zoom check superseded this one
+      const difference = z - sourceZ;
+      const factor = 2 ** difference;
+      const available = await isEsriTileAvailable(
+        sourceZ,
+        Math.floor(x / factor),
+        Math.floor(y / factor)
+      );
+      if (checkId !== adaptiveZoomCheckId) return;
+      if (available === true) {
+        const allowedMaxZoom = Math.min(MAP_MAX_ZOOM, sourceZ + MAX_LOCAL_ZOOM_STEPS);
+        state.map.setMaxZoom(allowedMaxZoom);
+        if (state.map.getZoom() > allowedMaxZoom + 1e-7) {
+          state.map.setZoom(allowedMaxZoom);
+        }
+        return;
+      }
+      // null means the availability endpoint could not be checked. Do not
+      // incorrectly lower the user's zoom limit because of a network failure.
+      if (available === null) return;
+    }
+  }
+
+  function updateZoomInfo() {
+    if (!state.map) return;
+    const info = $("map-zoom-info");
+    if (!info) return;
+    const zoom = state.map.getZoom();
+    const tileZoom = Math.floor(zoom);
+    const center = state.map.getCenter();
+    const n = 2 ** tileZoom;
+    const latitude = Math.max(-85.05112878, Math.min(85.05112878, center.lat));
+    const latRad = latitude * Math.PI / 180;
+    const x = Math.max(0, Math.min(n - 1, Math.floor((center.lng + 180) / 360 * n)));
+    const y = Math.max(0, Math.min(n - 1, Math.floor((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2 * n)));
+    const sourceZ = imageryTileStatus.get(tileKey(tileZoom, x, y));
+
+    if (sourceZ === undefined) {
+      info.textContent = `Map zoom ${zoom.toFixed(1)} · Imagery checking…`;
+      info.title = "Checking the best available Esri imagery tile for the map centre.";
+      return;
+    }
+    if (sourceZ === null) {
+      info.textContent = `Map zoom ${zoom.toFixed(1)} · No imagery within 4×`;
+      info.title = "No available Esri imagery tile was found within the maximum 4× local enlargement.";
+      return;
+    }
+    const enlargement = 2 ** Math.max(0, zoom - sourceZ);
+    const formatted = enlargement >= 10 ? enlargement.toFixed(0) : enlargement.toFixed(1).replace(/\.0$/, "");
+    info.textContent = `Map zoom ${zoom.toFixed(1)} · Imagery z${sourceZ} · ${formatted}×`;
+    info.title = `Map zoom ${zoom.toFixed(1)}; native imagery tile zoom ${sourceZ}; effective local enlargement ${formatted}×.`;
+  }
 
   async function init() {
     if (!cfg.SUPABASE_URL || cfg.SUPABASE_URL.includes("YOUR-PROJECT-REF") ||
@@ -165,9 +441,9 @@
     if (!state.map.getSource("esriImagery")) {
       state.map.addSource("esriImagery", {
         type: "raster",
-        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+        tiles: ["cymap-esri://{z}/{x}/{y}"],
         tileSize: 256,
-        maxzoom: 19,
+        maxzoom: MAP_MAX_ZOOM,
         attribution: "Satellite imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community"
       });
     }
@@ -182,19 +458,31 @@
   }
 
   function initMap() {
+    installEsriFallbackProtocol();
     state.map = new maplibregl.Map({
       attributionControl: { compact: true },
       container: "map",
       center: cfg.MAP_CENTER || [33.2, 35.1],
       zoom: cfg.MAP_ZOOM || 8,
+      maxZoom: MAP_MAX_ZOOM,
       style: "https://tiles.openfreemap.org/styles/liberty"
     });
+    zoomInfoUpdate = updateZoomInfo;
+    state.map.on("zoom", updateZoomInfo);
+    state.map.on("move", updateZoomInfo);
+    state.map.on("zoomend", updateZoomInfo);
+    state.map.on("moveend", () => {
+      updateZoomInfo();
+      updateAdaptiveMaxZoom();
+    });
+    updateZoomInfo();
     state.map.addControl(new maplibregl.NavigationControl(), "top-right");
     state.map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     state.map.on("load", () => {
       try { configureSatelliteAndLabels(); }
       catch (e) { console.error("Could not configure satellite/labels:", e); }
       state.mapLoaded = true;
+      updateAdaptiveMaxZoom();
       for (const layer of state.layers) addLayerToMap(layer);
       refreshAllSources();
     });
