@@ -42,8 +42,19 @@
     </aside>
     <section class="map-wrap">
       <div id="map" aria-label="Interactive map of Cyprus"></div>
+      <div id="place-search" class="place-search">
+        <div class="place-search-input-wrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+          <input id="place-search-input" type="search" autocomplete="off" spellcheck="false"
+            placeholder="Αναζήτηση πόλης ή χωριού στην Κύπρο…" aria-label="Αναζήτηση τοποθεσίας στην Κύπρο"
+            aria-controls="place-search-results" aria-expanded="false">
+          <button id="place-search-clear" type="button" aria-label="Καθαρισμός αναζήτησης" title="Καθαρισμός">×</button>
+        </div>
+        <div id="place-search-results" class="place-search-results" role="listbox" hidden></div>
+      </div>
+      <div id="map-feedback" class="map-feedback" role="status" aria-live="polite"></div>
       <div id="map-zoom-info" class="map-zoom-info" role="status" aria-live="polite" title="Current map zoom and satellite imagery enlargement">Map zoom 8.0 · Imagery checking…</div>
-</section>
+    </section>
   </main>
 
   <dialog id="login-dialog">
