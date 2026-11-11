@@ -525,9 +525,18 @@
       results.innerHTML = '<div class="place-search-empty">Δεν βρέθηκαν τοποθεσίες στην Κύπρο.</div>';
     } else {
       results.innerHTML = places.map((place, index) => {
-        const primary = escapeHtml(place.name || place.ascii_name || "Άγνωστη τοποθεσία");
-        const secondaryName = place.ascii_name && normalizePlaceQuery(place.ascii_name) !== normalizePlaceQuery(place.name)
-          ? `<span class="place-search-secondary">${escapeHtml(place.ascii_name)}</span>` : "";
+        // Prefer a Greek alternate name when GeoNames supplies one.
+        const preferredName = place.greek_name || place.name || place.ascii_name || "Άγνωστη τοποθεσία";
+        const primary = escapeHtml(preferredName);
+        const secondaryParts = [];
+        for (const candidate of [place.name, place.ascii_name]) {
+          if (candidate && normalizePlaceQuery(candidate) !== normalizePlaceQuery(preferredName) &&
+              !secondaryParts.some(value => normalizePlaceQuery(value) === normalizePlaceQuery(candidate))) {
+            secondaryParts.push(candidate);
+          }
+        }
+        const secondaryName = secondaryParts.length
+          ? `<span class="place-search-secondary">${secondaryParts.map(escapeHtml).join(" · ")}</span>` : "";
         return `<button type="button" class="place-search-result" role="option" data-place-index="${index}">
           <span class="place-search-result-icon" aria-hidden="true">⌖</span>
           <span class="place-search-result-text"><strong>${primary}</strong>${secondaryName}<small>${escapeHtml(placeFeatureLabel(place.feature_class, place.feature_code))}</small></span>
@@ -548,7 +557,8 @@
     const lat = Number(place.latitude);
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
     const input = $("place-search-input");
-    if (input) input.value = place.name || place.ascii_name || "";
+    const preferredName = place.greek_name || place.name || place.ascii_name || "";
+    if (input) input.value = preferredName;
     hidePlaceSearchResults();
     const targetZoom = place.feature_code === "PPLC" ? 11.5 : 13;
     state.map.flyTo({
@@ -557,7 +567,7 @@
       essential: true,
       duration: 1100
     });
-    showMapFeedback(`${place.name || place.ascii_name} · ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    showMapFeedback(`${preferredName} · ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
   }
 
   async function searchCyprusPlaces(rawQuery) {
