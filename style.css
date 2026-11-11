@@ -529,3 +529,125 @@ input[data-coordinate="longitude"]::-webkit-outer-spin-button {
   .feature-category { grid-column:1 / -1; }
   .category-toolbar { grid-column:1 / -1; }
 }
+
+/* CYMAP: Cyprus-only gazetteer search and right-click coordinate copy */
+.place-search {
+  position: absolute;
+  z-index: 20;
+  top: 14px;
+  left: 14px;
+  width: min(390px, calc(100% - 28px));
+  font-family: inherit;
+}
+.place-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 0 10px 0 13px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 3px 14px #0f172a24;
+}
+.place-search-input-wrap > svg {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  fill: none;
+  stroke: #667085;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+#place-search-input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #172033;
+  font: inherit;
+  font-size: 13px;
+}
+#place-search-input::placeholder { color: #98a2b3; }
+#place-search-clear {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #667085;
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+}
+#place-search-clear:hover { background: #f2f4f7; }
+.place-search-results {
+  max-height: min(390px, 55vh);
+  margin-top: 6px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px #0f172a24;
+}
+.place-search-results[hidden] { display: none !important; }
+.place-search-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid #f0f2f5;
+  background: #fff;
+  color: #172033;
+  text-align: left;
+  cursor: pointer;
+}
+.place-search-result:last-child { border-bottom: 0; }
+.place-search-result:hover, .place-search-result:focus-visible { background: #f0f7f4; outline: none; }
+.place-search-result-icon { flex: 0 0 22px; color: #17694d; font-size: 22px; text-align: center; }
+.place-search-result-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.place-search-result-text strong { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.place-search-secondary { color: #667085; font-size: 11px; }
+.place-search-result-text small { color: #98a2b3; font-size: 10px; }
+.place-search-empty { padding: 13px 14px; color: #667085; font-size: 12px; line-height: 1.45; }
+.place-search-error { color: #b42318; }
+.map-feedback {
+  position: absolute;
+  z-index: 19;
+  right: 14px;
+  bottom: 22px;
+  max-width: min(440px, calc(100% - 28px));
+  padding: 9px 13px;
+  border: 1px solid #d0d5dd;
+  border-radius: 9px;
+  background: rgba(255,255,255,.97);
+  color: #344054;
+  box-shadow: 0 3px 14px #0f172a24;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translateY(5px);
+  pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+}
+.map-feedback.is-visible { opacity: 1; transform: translateY(0); }
+.map-feedback.is-error { border-color: #fda29b; color: #b42318; }
+@media(max-width:760px) {
+  .place-search { top: 10px; left: 10px; width: min(360px, calc(100% - 20px)); }
+  .place-search-input-wrap { min-height: 43px; }
+  #place-search-input { height: 39px; font-size: 12px; }
+  .map-feedback { right: 10px; bottom: 12px; max-width: calc(100% - 20px); }
+}
+.place-search-attribution {
+  padding: 6px 12px 7px;
+  border-top: 1px solid #f0f2f5;
+  color: #98a2b3;
+  font-size: 9px;
+  text-align: right;
+}
