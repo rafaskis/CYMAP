@@ -723,3 +723,42 @@ body { min-height: 0; }
     margin-top: 0;
   }
 }
+
+
+/* CYMAP: one continuous sidebar with a scrollbar for all sidebar content. */
+#sidebar {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+#layers {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 0 0 auto !important;
+  min-height: 0;
+  overflow: visible;
+}
+#editor-panel {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+@media (max-width: 760px) {
+  #sidebar {
+    height: auto !important;
+    max-height: 43vh !important;
+    min-height: 0 !important;
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
+  }
+  #layers {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .editor-panel { flex: 0 0 auto; }
+}
