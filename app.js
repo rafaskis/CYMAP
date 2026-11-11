@@ -43,7 +43,8 @@
     isEditor: false, user: null, selectedFeature: null,
     visibility: {}, hiddenFeatureIds: new Set(), categories: [], collapsedCategoryIds: new Set(),
     collapsedCategoriesUserId: null, circlePlacementActive: false,
-    additionalLayerId: null, mapLoaded: false
+    additionalLayerId: null, mapLoaded: false,
+    placeSearchTimer: null, placeSearchRequestId: 0
   };
 
   function setStatus(message, bad = false) {
@@ -487,6 +488,156 @@
     info.title = `Map zoom ${zoom.toFixed(1)}; native imagery tile zoom ${sourceZ}; effective local enlargement ${formatted}×.`;
   }
 
+  function normalizePlaceQuery(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  }
+
+  function placeFeatureLabel(code) {
+    if (code === "PPLC") return "Πρωτεύουσα";
+    if (code && code.startsWith("PPLA")) return "Διοικητικό κέντρο";
+    if (code === "PPLX") return "Περιοχή / συνοικία";
+    return "Πόλη / χωριό";
+  }
+
+  function hidePlaceSearchResults() {
+    const results = $("place-search-results");
+    const input = $("place-search-input");
+    if (results) { results.hidden = true; results.innerHTML = ""; }
+    if (input) input.setAttribute("aria-expanded", "false");
+  }
+
+  function renderPlaceSearchResults(places, query) {
+    const results = $("place-search-results");
+    const input = $("place-search-input");
+    if (!results || !input) return;
+    if (!places.length) {
+      results.innerHTML = '<div class="place-search-empty">Δεν βρέθηκαν τοποθεσίες στην Κύπρο.</div>';
+    } else {
+      results.innerHTML = places.map((place, index) => {
+        const primary = escapeHtml(place.name || place.ascii_name || "Άγνωστη τοποθεσία");
+        const secondaryName = place.ascii_name && normalizePlaceQuery(place.ascii_name) !== normalizePlaceQuery(place.name)
+          ? `<span class="place-search-secondary">${escapeHtml(place.ascii_name)}</span>` : "";
+        return `<button type="button" class="place-search-result" role="option" data-place-index="${index}">
+          <span class="place-search-result-icon" aria-hidden="true">⌖</span>
+          <span class="place-search-result-text"><strong>${primary}</strong>${secondaryName}<small>${escapeHtml(placeFeatureLabel(place.feature_code))}</small></span>
+        </button>`;
+      }).join("");
+      results.querySelectorAll("[data-place-index]").forEach(button => {
+        button.addEventListener("click", () => selectPlace(places[Number(button.dataset.placeIndex)]));
+      });
+    }
+    results.insertAdjacentHTML("beforeend", '<div class="place-search-attribution">Δεδομένα τοποθεσιών: GeoNames</div>');
+    results.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function selectPlace(place) {
+    if (!place || !state.map) return;
+    const lng = Number(place.longitude);
+    const lat = Number(place.latitude);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+    const input = $("place-search-input");
+    if (input) input.value = place.name || place.ascii_name || "";
+    hidePlaceSearchResults();
+    const targetZoom = place.feature_code === "PPLC" ? 11.5 : 13;
+    state.map.flyTo({
+      center: [lng, lat],
+      zoom: Math.max(state.map.getZoom(), targetZoom),
+      essential: true,
+      duration: 1100
+    });
+    showMapFeedback(`${place.name || place.ascii_name} · ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+  }
+
+  async function searchCyprusPlaces(rawQuery) {
+    const query = normalizePlaceQuery(rawQuery);
+    const results = $("place-search-results");
+    if (query.length < 2) { hidePlaceSearchResults(); return; }
+    const requestId = ++state.placeSearchRequestId;
+    if (results) {
+      results.innerHTML = '<div class="place-search-empty">Αναζήτηση…</div>';
+      results.hidden = false;
+      $("place-search-input")?.setAttribute("aria-expanded", "true");
+    }
+    const { data, error } = await state.supabase.rpc("search_cyprus_places", {
+      search_term: query,
+      result_limit: 10
+    });
+    if (requestId !== state.placeSearchRequestId) return;
+    if (error) {
+      console.error("Cyprus place search failed:", error);
+      if (results) {
+        results.innerHTML = '<div class="place-search-empty place-search-error">Η αναζήτηση δεν είναι διαθέσιμη. Ελέγξτε ότι έχει εγκατασταθεί ο πίνακας τοποθεσιών και έχουν εισαχθεί τα δεδομένα.</div>';
+        results.hidden = false;
+      }
+      return;
+    }
+    renderPlaceSearchResults(data || [], query);
+  }
+
+  function initPlaceSearch() {
+    const input = $("place-search-input");
+    const clear = $("place-search-clear");
+    if (!input || !clear) return;
+    input.addEventListener("input", () => {
+      if (state.placeSearchTimer) clearTimeout(state.placeSearchTimer);
+      state.placeSearchTimer = setTimeout(() => searchCyprusPlaces(input.value), 260);
+    });
+    input.addEventListener("keydown", event => {
+      if (event.key === "Escape") { hidePlaceSearchResults(); input.blur(); }
+      if (event.key === "Enter") {
+        const first = $("place-search-results")?.querySelector("[data-place-index]");
+        if (first) { event.preventDefault(); first.click(); }
+      }
+    });
+    clear.addEventListener("click", () => {
+      input.value = "";
+      state.placeSearchRequestId++;
+      hidePlaceSearchResults();
+      input.focus();
+    });
+    document.addEventListener("pointerdown", event => {
+      const wrapper = $("place-search");
+      if (wrapper && !wrapper.contains(event.target)) hidePlaceSearchResults();
+    });
+  }
+
+  let mapFeedbackTimer = null;
+  function showMapFeedback(message, bad = false) {
+    const feedback = $("map-feedback");
+    if (!feedback) return;
+    feedback.textContent = message;
+    feedback.classList.toggle("is-error", bad);
+    feedback.classList.add("is-visible");
+    if (mapFeedbackTimer) clearTimeout(mapFeedbackTimer);
+    mapFeedbackTimer = setTimeout(() => feedback.classList.remove("is-visible"), 2600);
+  }
+
+  async function copyMapCoordinates(lat, lng) {
+    const coordinateText = `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`;
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(coordinateText);
+        copied = true;
+      }
+    } catch (error) { console.warn("Clipboard API unavailable; trying fallback:", error); }
+    if (!copied) {
+      const temporary = document.createElement("textarea");
+      temporary.value = coordinateText;
+      temporary.setAttribute("readonly", "");
+      temporary.style.position = "fixed";
+      temporary.style.opacity = "0";
+      document.body.appendChild(temporary);
+      temporary.select();
+      try { copied = document.execCommand("copy"); } catch { copied = false; }
+      temporary.remove();
+    }
+    showMapFeedback(copied
+      ? `Αντιγράφηκαν συντεταγμένες: ${coordinateText}`
+      : `Συντεταγμένες: ${coordinateText} (η αντιγραφή απέτυχε)`, !copied);
+  }
+
   async function init() {
     if (!cfg.SUPABASE_URL || cfg.SUPABASE_URL.includes("YOUR-PROJECT-REF") ||
         !cfg.SUPABASE_PUBLISHABLE_KEY || cfg.SUPABASE_PUBLISHABLE_KEY.includes("YOUR_SUPABASE")) {
@@ -502,6 +653,7 @@
     state.supabase = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY);
     state.visibility = readVisibility();
     initMap();
+    initPlaceSearch();
     try {
       const { data: { session } } = await state.supabase.auth.getSession();
       if (session?.user) await applySession(session.user);
@@ -643,6 +795,11 @@
           break;
         }
       }
+    });
+    state.map.on("contextmenu", (e) => {
+      e.preventDefault();
+      e.originalEvent?.preventDefault?.();
+      copyMapCoordinates(e.lngLat.lat, e.lngLat.lng);
     });
     state.map.on("error", (e) => console.warn("MapLibre error:", e.error || e));
   }
