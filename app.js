@@ -120,7 +120,24 @@
       }))
     };
   }
+  function circleCenterFeatureCollection(layerId) {
+    const circles = state.features.filter(feature =>
+      feature.layer_id === layerId && feature.properties?.shape === "circle" &&
+      Array.isArray(feature.properties?.center) && feature.properties.center.length === 2 &&
+      featureVisible(feature.id)
+    );
+    return {
+      type: "FeatureCollection",
+      features: circles.map(feature => ({
+        type: "Feature",
+        id: `circle-center-${feature.id}`,
+        geometry: { type: "Point", coordinates: feature.properties.center },
+        properties: { color: feature.properties?.color || "#2563eb" }
+      }))
+    };
+  }
   function sourceId(layerId) { return `features-${layerId}`; }
+  function centerSourceId(layerId) { return `circle-centers-${layerId}`; }
   function safeLayerSlug(slug) { return String(slug).replace(/[^a-zA-Z0-9_-]/g, "_"); }
 
   function tileKey(z, x, y) { return `${z}/${x}/${y}`; }
@@ -580,7 +597,12 @@
     if (!state.map.getSource(src)) {
       state.map.addSource(src, { type: "geojson", data: featureCollection(layer.id) });
     }
+    const centerSrc = centerSourceId(layer.id);
+    if (!state.map.getSource(centerSrc)) {
+      state.map.addSource(centerSrc, { type: "geojson", data: circleCenterFeatureCollection(layer.id) });
+    }
     const fill = `fill-${slug}`, outline = `outline-${slug}`, points = `points-${slug}`;
+    const circleCenters = `circle-centers-${slug}`;
     const layerColor = PERMANENT_LAYER_COLORS[layer.slug] || "#16a34a";
     const perFeatureColor = ["coalesce", ["get", "color"], layerColor];
     if (!state.map.getLayer(fill)) state.map.addLayer({
@@ -607,8 +629,19 @@
         "circle-stroke-width": 1.7
       }
     });
+    if (!state.map.getLayer(circleCenters)) state.map.addLayer({
+      id: circleCenters, type: "circle", source: centerSrc,
+      paint: {
+        "circle-radius": 5,
+        "circle-color": ["coalesce", ["get", "color"], "#2563eb"],
+        "circle-opacity": 0.6,
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 1.5,
+        "circle-stroke-opacity": 0.9
+      }
+    });
     if (!state.renderLayerIds) state.renderLayerIds = [];
-    for (const id of [fill, outline, points]) {
+    for (const id of [fill, outline, points, circleCenters]) {
       if (!state.renderLayerIds.includes(id)) state.renderLayerIds.push(id);
     }
     setMapLayerVisibility(layer);
@@ -618,7 +651,7 @@
     if (!state.map || !state.mapLoaded) return;
     const visible = layerVisible(layer.id) ? "visible" : "none";
     const slug = safeLayerSlug(layer.slug);
-    for (const id of [`fill-${slug}`, `outline-${slug}`, `points-${slug}`]) {
+    for (const id of [`fill-${slug}`, `outline-${slug}`, `points-${slug}`, `circle-centers-${slug}`]) {
       if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visible);
     }
   }
@@ -627,6 +660,8 @@
     for (const layer of state.layers) {
       const source = state.map.getSource(sourceId(layer.id));
       if (source) source.setData(featureCollection(layer.id));
+      const centerSource = state.map.getSource(centerSourceId(layer.id));
+      if (centerSource) centerSource.setData(circleCenterFeatureCollection(layer.id));
       setMapLayerVisibility(layer);
     }
   }
@@ -825,7 +860,7 @@
     return state.draw;
   }
 
-  const DEFAULT_CIRCLE_RADIUS_METRES = 2500;
+  const DEFAULT_CIRCLE_RADIUS_METRES = 5000;
   function measureGeodesicDistanceMetres(a, b) {
     const earthRadius = 6371008.8;
     const toRadians = value => value * Math.PI / 180;
