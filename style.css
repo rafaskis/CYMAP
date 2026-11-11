@@ -666,3 +666,60 @@ body { min-height: 0; }
   #sidebar { height: auto; min-height: 0; max-height: 43vh; overflow-y: auto !important; overflow-x: hidden !important; }
   .map-wrap { min-height: 0; }
 }
+
+
+/* CYMAP: keep base layers and creation tools fixed; scroll only user categories/features. */
+#sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden !important;
+}
+#layers {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+.user-data-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 3px;
+}
+.user-data-scroll:empty { display: none; }
+.user-data-scroll .category-feature-list {
+  max-height: none;
+  overflow: visible;
+}
+#editor-panel {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-bottom: 2px;
+}
+@media (max-width: 760px) {
+  #sidebar {
+    height: 43vh;
+    max-height: 43vh;
+    min-height: 0;
+    overflow: hidden !important;
+    gap: 8px;
+  }
+  #layers { flex: 0 0 auto; }
+  .user-data-scroll {
+    flex: 1 1 0;
+    min-height: 45px;
+    max-height: none;
+    overflow-y: auto;
+  }
+  #editor-panel {
+    flex: 0 0 auto;
+    margin-top: 0;
+  }
+}
