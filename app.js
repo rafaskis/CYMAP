@@ -937,6 +937,7 @@
       const [lng, lat] = geometry.coordinates;
       return `Συντεταγμένες: ${formatCoord(lat)}, ${formatCoord(lng)}`;
     }
+    if (feature.properties?.shape === "circle") return "";
     if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
       const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
       const lines = [];
@@ -1074,11 +1075,19 @@
       ? feature.properties.color : (feature.properties?.shape === "circle" ? "#2563eb" : (PERMANENT_LAYER_COLORS[additionalLayer()?.slug] || "#16a34a"));
     $("feature-delete").classList.toggle("hidden", !(canModifyFeature(feature) && allowDelete && !!feature.id));
     $("feature-error").textContent = "";
-    setupEditablePointCoordinates(feature);
-    setupEditablePolygonCoordinates(feature);
     const isCircle = feature.properties?.shape === "circle";
-    $("feature-circle-radius-fields").classList.toggle("hidden", !isCircle);
     if (isCircle) {
+      // Existing circles are intentionally limited to name, colour and delete.
+      $("edit-point-coordinate-fields").classList.add("hidden");
+      $("edit-polygon-coordinate-fields").classList.add("hidden");
+      $("edit-polygon-coordinate-list").innerHTML = "";
+    } else {
+      setupEditablePointCoordinates(feature);
+      setupEditablePolygonCoordinates(feature);
+    }
+    // Radius is needed only while creating a new circle, not when editing a saved one.
+    $("feature-circle-radius-fields").classList.toggle("hidden", !isCircle || !!feature.id);
+    if (isCircle && !feature.id) {
       $("feature-circle-radius").value = String(existingCircleRadius(feature));
     }
     featureDialog.showModal();
@@ -1094,7 +1103,7 @@
     $("feature-error").textContent = "";
     let editedGeometry = feature.geometry;
     let updatedProperties = { ...(feature.properties || {}), color };
-    if (feature.properties?.shape === "circle") {
+    if (feature.properties?.shape === "circle" && !feature.id) {
       const radiusText = $("feature-circle-radius").value.trim();
       const radius = Number(radiusText);
       if (!radiusText || !Number.isFinite(radius) || radius <= 0) {
