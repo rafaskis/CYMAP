@@ -520,7 +520,7 @@
           layer_id: state.additionalLayerId,
           name_el: "", name_en: "", geometry,
           description: "",
-          properties: { color: PERMANENT_LAYER_COLORS.additional_data, shape: "circle", radius_m: DEFAULT_CIRCLE_RADIUS_METRES, center: circleCenter }
+          properties: { color: "#2563eb", shape: "circle", radius_m: DEFAULT_CIRCLE_RADIUS_METRES, center: circleCenter }
         };
         openFeatureDialog(state.selectedFeature, false);
         return;
@@ -588,8 +588,8 @@
       filter: ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]],
       paint: {
         "fill-color": perFeatureColor,
-        // A circle's interior is 10% transparent (90% opaque); other polygons retain 27% opacity.
-        "fill-opacity": ["case", ["==", ["get", "shape"], "circle"], 0.9, 0.27]
+        // A circle's interior is 80% transparent (20% opaque); other polygons retain 27% opacity.
+        "fill-opacity": ["case", ["==", ["get", "shape"], "circle"], 0.2, 0.27]
       }
     });
     if (!state.map.getLayer(outline)) state.map.addLayer({
@@ -1071,7 +1071,7 @@
     $("feature-id").value = feature.id || "";
     $("feature-name").value = feature.name_el || feature.name_en || "";
     $("feature-color").value = /^#[0-9a-f]{6}$/i.test(feature.properties?.color || "")
-      ? feature.properties.color : (PERMANENT_LAYER_COLORS[additionalLayer()?.slug] || "#16a34a");
+      ? feature.properties.color : (feature.properties?.shape === "circle" ? "#2563eb" : (PERMANENT_LAYER_COLORS[additionalLayer()?.slug] || "#16a34a"));
     $("feature-delete").classList.toggle("hidden", !(canModifyFeature(feature) && allowDelete && !!feature.id));
     $("feature-error").textContent = "";
     setupEditablePointCoordinates(feature);
@@ -1228,7 +1228,7 @@
     $("point-longitude").required = mode === "point" || mode === "circle";
     $("point-latitude").required = mode === "point" || mode === "circle";
     $("coordinate-name").value = "";
-    $("coordinate-color").value = PERMANENT_LAYER_COLORS.additional_data;
+    $("coordinate-color").value = mode === "circle" ? "#2563eb" : PERMANENT_LAYER_COLORS.additional_data;
     $("coordinate-error").textContent = "";
     const list = $("polygon-coordinate-list");
     list.innerHTML = "";
