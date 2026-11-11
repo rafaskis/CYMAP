@@ -4,7 +4,6 @@
   const $ = (id) => document.getElementById(id);
   const statusEl = $("status");
   const layersEl = $("layers");
-  const userDataEl = $("user-data-scroll");
   const layerSelect = $("active-layer");
   const loginDialog = $("login-dialog");
   const featureDialog = $("feature-dialog");
@@ -953,7 +952,6 @@
   }
   function renderLayers() {
     layersEl.innerHTML = "";
-    if (userDataEl) userDataEl.innerHTML = "";
     if (!state.layers.length) {
       layersEl.innerHTML = '<div class="empty">No layers found in the database.</div>';
       return;
@@ -988,7 +986,7 @@
       addButton.textContent = "＋ Νέα κατηγορία";
       addButton.addEventListener("click", createCategory);
       toolbar.appendChild(addButton);
-      (userDataEl || layersEl).appendChild(toolbar);
+      layersEl.appendChild(toolbar);
 
       const featureItems = state.features.filter(f => f.layer_id === layer.id)
         .slice().sort((a, b) => displayFeatureName(a).localeCompare(displayFeatureName(b), "el"));
@@ -1096,7 +1094,7 @@
           }
         }
         group.appendChild(list);
-        (userDataEl || layersEl).appendChild(group);
+        layersEl.appendChild(group);
       };
 
       for (const category of state.categories) {
