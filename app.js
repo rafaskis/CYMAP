@@ -40,7 +40,8 @@
   const state = {
     supabase: null, map: null, draw: null, layers: [], features: [],
     isEditor: false, user: null, selectedFeature: null,
-    visibility: {}, additionalLayerId: null, mapLoaded: false
+    visibility: {}, hiddenFeatureIds: new Set(), circlePlacementActive: false,
+    additionalLayerId: null, mapLoaded: false
   };
 
   function setStatus(message, bad = false) {
@@ -61,6 +62,28 @@
   }
   function layerVisible(layerId) {
     return state.visibility[layerId] !== false;
+  }
+  function featureVisible(featureId) {
+    return !state.hiddenFeatureIds.has(String(featureId));
+  }
+  function loadFeatureVisibility() {
+    const key = `cymap.hiddenFeatures.v1.${state.user?.id || "anonymous"}`;
+    try {
+      const ids = JSON.parse(localStorage.getItem(key) || "[]");
+      state.hiddenFeatureIds = new Set(Array.isArray(ids) ? ids.map(String) : []);
+    } catch { state.hiddenFeatureIds = new Set(); }
+  }
+  function saveFeatureVisibility() {
+    const key = `cymap.hiddenFeatures.v1.${state.user?.id || "anonymous"}`;
+    localStorage.setItem(key, JSON.stringify([...state.hiddenFeatureIds]));
+  }
+  function toggleFeatureVisibility(feature) {
+    const id = String(feature.id);
+    if (state.hiddenFeatureIds.has(id)) state.hiddenFeatureIds.delete(id);
+    else state.hiddenFeatureIds.add(id);
+    saveFeatureVisibility();
+    refreshAllSources();
+    renderLayers();
   }
   function getLayer(id) { return state.layers.find(x => x.id === id); }
 
@@ -83,7 +106,7 @@
     return feature?.properties?.color || PERMANENT_LAYER_COLORS[ getLayer(feature?.layer_id)?.slug ] || "#16a34a";
   }
   function featureCollection(layerId = null) {
-    const rows = state.features.filter(f => !layerId || f.layer_id === layerId);
+    const rows = state.features.filter(f => (!layerId || f.layer_id === layerId) && featureVisible(f.id));
     return {
       type: "FeatureCollection",
       features: rows.map(f => ({
@@ -91,7 +114,8 @@
         properties: {
           id: f.id, layer_id: f.layer_id,
           name_el: f.name_el || "", name_en: f.name_en || "",
-          color: f.properties?.color || null
+          color: f.properties?.color || null,
+          shape: f.properties?.shape || null
         }
       }))
     };
@@ -487,6 +511,20 @@
       refreshAllSources();
     });
     state.map.on("click", (e) => {
+      if (state.circlePlacementActive && state.isEditor) {
+        state.circlePlacementActive = false;
+        state.map.getCanvas().style.cursor = "";
+        const circleCenter = [e.lngLat.lng, e.lngLat.lat];
+        const geometry = createCircleGeometry(circleCenter[0], circleCenter[1], DEFAULT_CIRCLE_RADIUS_METRES);
+        state.selectedFeature = {
+          layer_id: state.additionalLayerId,
+          name_el: "", name_en: "", geometry,
+          description: "",
+          properties: { color: PERMANENT_LAYER_COLORS.additional_data, shape: "circle", radius_m: DEFAULT_CIRCLE_RADIUS_METRES, center: circleCenter }
+        };
+        openFeatureDialog(state.selectedFeature, false);
+        return;
+      }
       // In drawing modes, the click belongs to Mapbox Draw.
       if (state.isEditor && state.draw && state.draw.getMode() !== "simple_select" &&
           state.draw.getMode() !== "direct_select") return;
@@ -548,7 +586,11 @@
     if (!state.map.getLayer(fill)) state.map.addLayer({
       id: fill, type: "fill", source: src,
       filter: ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]],
-      paint: { "fill-color": perFeatureColor, "fill-opacity": 0.27 }
+      paint: {
+        "fill-color": perFeatureColor,
+        // A circle's interior is 10% transparent (90% opaque); other polygons retain 27% opacity.
+        "fill-opacity": ["case", ["==", ["get", "shape"], "circle"], 0.9, 0.27]
+      }
     });
     if (!state.map.getLayer(outline)) state.map.addLayer({
       id: outline, type: "line", source: src,
@@ -626,12 +668,26 @@
           list.innerHTML = '<div class="additional-feature-empty">Δεν υπάρχουν στοιχεία ακόμη</div>';
         } else {
           for (const feature of items) {
-            const item = document.createElement("button");
-            item.type = "button";
+            const item = document.createElement("div");
             item.className = "additional-feature-item";
-            item.title = "Κεντράρισμα στον χάρτη";
-            item.innerHTML = `<span class="additional-feature-dot" style="background:${escapeHtml(featureColor(feature))}"></span><span class="additional-feature-name">${escapeHtml(displayFeatureName(feature))}</span>`;
-            item.addEventListener("click", () => centerOnFeature(feature));
+            const centerButton = document.createElement("button");
+            centerButton.type = "button";
+            centerButton.className = "additional-feature-center";
+            centerButton.title = "Κεντράρισμα στον χάρτη";
+            centerButton.innerHTML = `<span class="additional-feature-dot" style="background:${escapeHtml(featureColor(feature))}"></span><span class="additional-feature-name">${escapeHtml(displayFeatureName(feature))}</span>`;
+            centerButton.addEventListener("click", () => centerOnFeature(feature));
+            const visible = featureVisible(feature.id);
+            const eyeButton = document.createElement("button");
+            eyeButton.type = "button";
+            eyeButton.className = `additional-feature-visibility${visible ? "" : " is-hidden"}`;
+            eyeButton.title = visible ? "Απόκρυψη στοιχείου" : "Εμφάνιση στοιχείου";
+            eyeButton.setAttribute("aria-label", eyeButton.title);
+            eyeButton.setAttribute("aria-pressed", String(visible));
+            eyeButton.innerHTML = visible
+              ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>'
+              : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.6 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a16 16 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.1-1.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+            eyeButton.addEventListener("click", () => toggleFeatureVisibility(feature));
+            item.append(centerButton, eyeButton);
             list.appendChild(item);
           }
         }
@@ -642,6 +698,12 @@
 
   function centerOnFeature(feature) {
     if (!state.map || !feature?.geometry) return;
+    if (!featureVisible(feature.id)) {
+      state.hiddenFeatureIds.delete(String(feature.id));
+      saveFeatureVisibility();
+      refreshAllSources();
+      renderLayers();
+    }
     const layer = getLayer(feature.layer_id);
     if (layer && !layerVisible(layer.id)) {
       state.visibility[layer.id] = true;
@@ -699,6 +761,7 @@
       refreshAllSources();
     }
     state.user = user;
+    loadFeatureVisibility();
     const { data, error } = await state.supabase.from("map_editors")
       .select("user_id").eq("user_id", user.id).maybeSingle();
     if (error) console.warn("Editor permission check:", error.message);
@@ -714,6 +777,9 @@
   }
   function clearSession() {
     state.user = null;
+    state.circlePlacementActive = false;
+    if (state.map) state.map.getCanvas().style.cursor = "";
+    state.hiddenFeatureIds = new Set();
     state.isEditor = false;
     // Remove personal data from memory and redraw immediately on logout.
     state.features = state.features.filter(feature =>
@@ -759,8 +825,67 @@
     return state.draw;
   }
 
+  const DEFAULT_CIRCLE_RADIUS_METRES = 5000;
+  function measureGeodesicDistanceMetres(a, b) {
+    const earthRadius = 6371008.8;
+    const toRadians = value => value * Math.PI / 180;
+    const lat1 = toRadians(a[1]), lat2 = toRadians(b[1]);
+    const dLat = lat2 - lat1, dLng = toRadians(b[0] - a[0]);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * earthRadius * Math.asin(Math.sqrt(h));
+  }
+
+  function existingCircleRadius(feature) {
+    const stored = Number(feature.properties?.radius_m);
+    if (Number.isFinite(stored) && stored > 0) return stored;
+    const ring = feature.geometry?.coordinates?.[0];
+    if (!Array.isArray(ring) || ring.length < 4) return DEFAULT_CIRCLE_RADIUS_METRES;
+    const center = [ringCentroidLongitude(ring), ringCentroidLatitude(ring)];
+    return Math.max(1, Math.round(measureGeodesicDistanceMetres(center, ring[0])));
+  }
+
+  function createCircleGeometry(longitude, latitude, radiusMetres = DEFAULT_CIRCLE_RADIUS_METRES) {
+    const earthRadius = 6371008.8;
+    const angularDistance = radiusMetres / earthRadius;
+    const lat1 = latitude * Math.PI / 180;
+    const lon1 = longitude * Math.PI / 180;
+    const ring = [];
+    // 96 geodesic segments produce a smooth circle for the selected radius.
+    for (let bearing = 0; bearing <= 360; bearing += 360 / 96) {
+      const theta = bearing * Math.PI / 180;
+      const lat2 = Math.asin(
+        Math.sin(lat1) * Math.cos(angularDistance) +
+        Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(theta)
+      );
+      const lon2 = lon1 + Math.atan2(
+        Math.sin(theta) * Math.sin(angularDistance) * Math.cos(lat1),
+        Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
+      );
+      ring.push([((lon2 * 180 / Math.PI + 540) % 360) - 180, lat2 * 180 / Math.PI]);
+    }
+    if (ring.length && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) {
+      ring.push([...ring[0]]);
+    }
+    return { type: "Polygon", coordinates: [ring] };
+  }
+
+  function beginCirclePlacement() {
+    if (!state.isEditor || !state.additionalLayerId) {
+      alert("Απαιτείται εξουσιοδοτημένη είσοδος.");
+      return;
+    }
+    if (state.draw) {
+      try { state.draw.deleteAll(); state.draw.changeMode("simple_select"); } catch {}
+    }
+    state.circlePlacementActive = true;
+    state.map.getCanvas().style.cursor = "crosshair";
+    setStatus(`Κάντε κλικ στον χάρτη για να ορίσετε το κέντρο του κύκλου (προεπιλεγμένη ακτίνα ${DEFAULT_CIRCLE_RADIUS_METRES} m).`);
+  }
+
   function beginDraw(mode) {
     try {
+      state.circlePlacementActive = false;
+      if (state.map) state.map.getCanvas().style.cursor = "";
       if (!state.additionalLayerId) throw new Error('Missing layer "ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ".');
       const draw = ensureDraw();
       draw.deleteAll();
@@ -951,6 +1076,11 @@
     $("feature-error").textContent = "";
     setupEditablePointCoordinates(feature);
     setupEditablePolygonCoordinates(feature);
+    const isCircle = feature.properties?.shape === "circle";
+    $("feature-circle-radius-fields").classList.toggle("hidden", !isCircle);
+    if (isCircle) {
+      $("feature-circle-radius").value = String(existingCircleRadius(feature));
+    }
     featureDialog.showModal();
     setTimeout(() => $("feature-name").focus(), 0);
   }
@@ -963,10 +1093,26 @@
     const color = $("feature-color").value;
     $("feature-error").textContent = "";
     let editedGeometry = feature.geometry;
+    let updatedProperties = { ...(feature.properties || {}), color };
+    if (feature.properties?.shape === "circle") {
+      const radiusText = $("feature-circle-radius").value.trim();
+      const radius = Number(radiusText);
+      if (!radiusText || !Number.isFinite(radius) || radius <= 0) {
+        $("feature-error").textContent = "Εισαγάγετε έγκυρη ακτίνα μεγαλύτερη από 0 μέτρα.";
+        $("feature-circle-radius").focus();
+        return;
+      }
+      const center = Array.isArray(feature.properties?.center) && feature.properties.center.length === 2
+        ? feature.properties.center
+        : [ringCentroidLongitude(feature.geometry.coordinates[0]), ringCentroidLatitude(feature.geometry.coordinates[0])];
+      editedGeometry = createCircleGeometry(Number(center[0]), Number(center[1]), radius);
+      updatedProperties = { ...updatedProperties, radius_m: radius, center };
+    }
     try {
       if (feature.id && !$("edit-point-coordinate-fields").classList.contains("hidden")) {
         editedGeometry = readEditedPointGeometry();
-      } else if (feature.id && !$("edit-polygon-coordinate-fields").classList.contains("hidden")) {
+      } else if (feature.id && feature.properties?.shape !== "circle" &&
+          !$("edit-polygon-coordinate-fields").classList.contains("hidden")) {
         editedGeometry = readEditedPolygonGeometry(feature.geometry);
       }
     } catch (error) {
@@ -987,7 +1133,7 @@
         .update({
           name_el: name, name_en: "",
           geometry: editedGeometry,
-          properties: { ...(feature.properties || {}), color },
+          properties: updatedProperties,
           updated_at: new Date().toISOString()
         })
         .eq("id", feature.id).select("*").single();
@@ -1001,7 +1147,7 @@
         owner_id: state.user.id,
         name_el: name, name_en: "",
         geometry: feature.geometry,
-        properties: { color }
+        properties: updatedProperties
       };
       const { data, error } = await state.supabase.from("map_features").insert(row).select("*").single();
       if (error) { $("feature-error").textContent = error.message; return; }
@@ -1067,14 +1213,20 @@
   let coordinateMode = "point";
 
   function resetCoordinateDialog(mode) {
+    state.circlePlacementActive = false;
+    if (state.map) state.map.getCanvas().style.cursor = "";
     coordinateMode = mode;
     $("coordinate-heading").textContent = mode === "point"
       ? "Προσθήκη σημείου με συντεταγμένες"
-      : "Προσθήκη πολυγώνου με συντεταγμένες";
-    $("point-coordinate-fields").classList.toggle("hidden", mode !== "point");
+      : mode === "circle"
+        ? "Προσθήκη κύκλου με συντεταγμένες"
+        : "Προσθήκη πολυγώνου με συντεταγμένες";
+    $("point-coordinate-fields").classList.toggle("hidden", mode !== "point" && mode !== "circle");
     $("polygon-coordinate-fields").classList.toggle("hidden", mode !== "polygon");
-    $("point-longitude").required = mode === "point";
-    $("point-latitude").required = mode === "point";
+    $("circle-radius-fields").classList.toggle("hidden", mode !== "circle");
+    $("circle-radius").value = String(DEFAULT_CIRCLE_RADIUS_METRES);
+    $("point-longitude").required = mode === "point" || mode === "circle";
+    $("point-latitude").required = mode === "point" || mode === "circle";
     $("coordinate-name").value = "";
     $("coordinate-color").value = PERMANENT_LAYER_COLORS.additional_data;
     $("coordinate-error").textContent = "";
@@ -1125,14 +1277,26 @@
       return;
     }
     let geometry;
-    if (coordinateMode === "point") {
+    if (coordinateMode === "point" || coordinateMode === "circle") {
       const lng = Number($("point-longitude").value);
       const lat = Number($("point-latitude").value);
       if (!Number.isFinite(lng) || !Number.isFinite(lat) || lng < -180 || lng > 180 || lat < -90 || lat > 90) {
         $("coordinate-error").textContent = "Ελέγξτε το γεωγραφικό μήκος (-180 έως 180) και πλάτος (-90 έως 90).";
         return;
       }
-      geometry = { type: "Point", coordinates: [lng, lat] };
+      if (coordinateMode === "circle") {
+        const radiusText = $("circle-radius").value.trim();
+        const radius = Number(radiusText);
+        if (!radiusText || !Number.isFinite(radius) || radius <= 0) {
+          $("coordinate-error").textContent = "Εισαγάγετε έγκυρη ακτίνα μεγαλύτερη από 0 μέτρα.";
+          $("circle-radius").focus();
+          return;
+        }
+        geometry = createCircleGeometry(lng, lat, radius);
+        var circleProperties = { shape: "circle", radius_m: radius, center: [lng, lat] };
+      } else {
+        geometry = { type: "Point", coordinates: [lng, lat] };
+      }
     } else {
       const rows = [...$("polygon-coordinate-list").querySelectorAll(".coordinate-row")];
       if (rows.length < 3) {
@@ -1161,7 +1325,7 @@
       owner_id: state.user.id,
       name_el: name, name_en: "",
       geometry,
-      properties: { color }
+      properties: { ...(coordinateMode === "circle" ? circleProperties : {}), color }
     }).select("*").single();
     $("coordinate-save").disabled = false;
     if (error) {
@@ -1217,6 +1381,11 @@
   $("draw-point").addEventListener("click", () => beginDraw("draw_point"));
 
   $("draw-polygon").addEventListener("click", () => beginDraw("draw_polygon"));
+  $("draw-circle").addEventListener("click", beginCirclePlacement);
+  $("coordinate-circle").addEventListener("click", () => {
+    if (!state.isEditor) { alert("Απαιτείται εξουσιοδοτημένη είσοδος."); return; }
+    resetCoordinateDialog("circle");
+  });
   $("coordinate-point").addEventListener("click", () => {
     if (!state.isEditor) { alert("Απαιτείται εξουσιοδοτημένη είσοδος."); return; }
     resetCoordinateDialog("point");
