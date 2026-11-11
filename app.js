@@ -8,6 +8,7 @@
   const loginDialog = $("login-dialog");
   const featureDialog = $("feature-dialog");
   const layerVisibilityKey = "cymap.layerVisibility.v1";
+  const collapsedCategoriesKey = "cymap.collapsedCategories.v1";
 
   // Adaptive Esri imagery zoom: native imagery is capped at z19, with up to
   // 4x local enlargement (two additional map zoom levels).
@@ -40,7 +41,8 @@
   const state = {
     supabase: null, map: null, draw: null, layers: [], features: [],
     isEditor: false, user: null, selectedFeature: null,
-    visibility: {}, hiddenFeatureIds: new Set(), categories: [], circlePlacementActive: false,
+    visibility: {}, hiddenFeatureIds: new Set(), categories: [], collapsedCategoryIds: new Set(),
+    collapsedCategoriesUserId: null, circlePlacementActive: false,
     additionalLayerId: null, mapLoaded: false
   };
 
@@ -72,6 +74,32 @@
   }
   function featureOwnVisible(feature) { return feature?.is_visible !== false; }
   function categoryVisible(category) { return category?.is_visible !== false; }
+  function loadCollapsedCategories(userId) {
+    state.collapsedCategoryIds = new Set();
+    state.collapsedCategoriesUserId = userId || null;
+    if (!userId) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(collapsedCategoriesKey) || "{}");
+      const ids = Array.isArray(saved[userId]) ? saved[userId] : [];
+      state.collapsedCategoryIds = new Set(ids.map(String));
+    } catch { state.collapsedCategoryIds = new Set(); }
+  }
+  function saveCollapsedCategories() {
+    const userId = state.collapsedCategoriesUserId;
+    if (!userId) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(collapsedCategoriesKey) || "{}");
+      saved[userId] = [...state.collapsedCategoryIds];
+      localStorage.setItem(collapsedCategoriesKey, JSON.stringify(saved));
+    } catch (error) { console.warn("Could not save collapsed category preferences:", error); }
+  }
+  function toggleCategoryCollapsed(categoryId) {
+    const id = String(categoryId || "__uncategorized__");
+    if (state.collapsedCategoryIds.has(id)) state.collapsedCategoryIds.delete(id);
+    else state.collapsedCategoryIds.add(id);
+    saveCollapsedCategories();
+    renderLayers();
+  }
   function getLayer(id) { return state.layers.find(x => x.id === id); }
 
   async function toggleFeatureVisibility(feature) {
@@ -791,6 +819,19 @@
         group.dataset.categoryId = category?.id || "";
         const header = document.createElement("div");
         header.className = "feature-category-header";
+        const collapseId = String(category?.id || "__uncategorized__");
+        const collapsed = state.collapsedCategoryIds.has(collapseId);
+        const collapseButton = document.createElement("button");
+        collapseButton.type = "button";
+        collapseButton.className = "category-collapse-toggle";
+        collapseButton.title = collapsed ? "Ανάπτυξη κατηγορίας" : "Σύμπτυξη κατηγορίας";
+        collapseButton.setAttribute("aria-label", collapseButton.title);
+        collapseButton.setAttribute("aria-expanded", String(!collapsed));
+        collapseButton.innerHTML = collapsed
+          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+        collapseButton.addEventListener("click", () => toggleCategoryCollapsed(collapseId));
+        header.appendChild(collapseButton);
         const title = document.createElement("span");
         title.className = "feature-category-title";
         title.textContent = isUncategorized ? "Χωρίς κατηγορία" : category.name;
@@ -818,6 +859,7 @@
         group.appendChild(header);
         const list = document.createElement("div");
         list.className = "additional-feature-list category-feature-list";
+        list.hidden = collapsed;
         list.setAttribute("aria-label", isUncategorized ? "Στοιχεία χωρίς κατηγορία" : `Στοιχεία: ${category.name}`);
         list.addEventListener("dragover", event => { event.preventDefault(); group.classList.add("drop-target"); });
         list.addEventListener("dragleave", event => { if (!group.contains(event.relatedTarget)) group.classList.remove("drop-target"); });
@@ -945,6 +987,7 @@
       refreshAllSources();
     }
     state.user = user;
+    if (state.collapsedCategoriesUserId !== user.id) loadCollapsedCategories(user.id);
     const { data, error } = await state.supabase.from("map_editors")
       .select("user_id").eq("user_id", user.id).maybeSingle();
     if (error) console.warn("Editor permission check:", error.message);
@@ -960,6 +1003,8 @@
   }
   function clearSession() {
     state.user = null;
+    state.collapsedCategoriesUserId = null;
+    state.collapsedCategoryIds = new Set();
     state.circlePlacementActive = false;
     if (state.map) state.map.getCanvas().style.cursor = "";
     state.hiddenFeatureIds = new Set();
