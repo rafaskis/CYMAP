@@ -492,11 +492,22 @@
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
   }
 
-  function placeFeatureLabel(code) {
-    if (code === "PPLC") return "Πρωτεύουσα";
-    if (code && code.startsWith("PPLA")) return "Διοικητικό κέντρο";
-    if (code === "PPLX") return "Περιοχή / συνοικία";
-    return "Πόλη / χωριό";
+  function placeFeatureLabel(featureClass, code) {
+    if (featureClass === "P" || !featureClass) {
+      if (code === "PPLC") return "Πρωτεύουσα";
+      if (code && code.startsWith("PPLA")) return "Διοικητικό κέντρο";
+      if (code === "PPLX") return "Περιοχή / συνοικία";
+      return "Πόλη / χωριό";
+    }
+    const labels = {
+      A: "Διοικητική περιοχή",
+      H: "Υδρογραφικό στοιχείο",
+      L: "Περιοχή / τοπωνύμιο",
+      S: "Σημείο ενδιαφέροντος",
+      T: "Γεωμορφολογικό στοιχείο",
+      V: "Στοιχείο βλάστησης"
+    };
+    return labels[featureClass] || "Γεωγραφική τοποθεσία";
   }
 
   function hidePlaceSearchResults() {
@@ -519,7 +530,7 @@
           ? `<span class="place-search-secondary">${escapeHtml(place.ascii_name)}</span>` : "";
         return `<button type="button" class="place-search-result" role="option" data-place-index="${index}">
           <span class="place-search-result-icon" aria-hidden="true">⌖</span>
-          <span class="place-search-result-text"><strong>${primary}</strong>${secondaryName}<small>${escapeHtml(placeFeatureLabel(place.feature_code))}</small></span>
+          <span class="place-search-result-text"><strong>${primary}</strong>${secondaryName}<small>${escapeHtml(placeFeatureLabel(place.feature_class, place.feature_code))}</small></span>
         </button>`;
       }).join("");
       results.querySelectorAll("[data-place-index]").forEach(button => {
