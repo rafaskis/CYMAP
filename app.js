@@ -825,7 +825,7 @@
     return state.draw;
   }
 
-  const DEFAULT_CIRCLE_RADIUS_METRES = 5000;
+  const DEFAULT_CIRCLE_RADIUS_METRES = 2500;
   function measureGeodesicDistanceMetres(a, b) {
     const earthRadius = 6371008.8;
     const toRadians = value => value * Math.PI / 180;
@@ -1085,9 +1085,9 @@
       setupEditablePointCoordinates(feature);
       setupEditablePolygonCoordinates(feature);
     }
-    // Radius is needed only while creating a new circle, not when editing a saved one.
-    $("feature-circle-radius-fields").classList.toggle("hidden", !isCircle || !!feature.id);
-    if (isCircle && !feature.id) {
+    // Circle radius can be adjusted both when creating and editing a circle.
+    $("feature-circle-radius-fields").classList.toggle("hidden", !isCircle);
+    if (isCircle) {
       $("feature-circle-radius").value = String(existingCircleRadius(feature));
     }
     featureDialog.showModal();
@@ -1103,7 +1103,7 @@
     $("feature-error").textContent = "";
     let editedGeometry = feature.geometry;
     let updatedProperties = { ...(feature.properties || {}), color };
-    if (feature.properties?.shape === "circle" && !feature.id) {
+    if (feature.properties?.shape === "circle") {
       const radiusText = $("feature-circle-radius").value.trim();
       const radius = Number(radiusText);
       if (!radiusText || !Number.isFinite(radius) || radius <= 0) {
