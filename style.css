@@ -499,3 +499,29 @@ input[data-coordinate="longitude"]::-webkit-outer-spin-button {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* CYMAP: account-synchronised feature categories and drag/drop */
+.category-toolbar { display:flex; justify-content:flex-end; margin: -2px 0 2px; }
+.category-add { width:100%; text-align:left; }
+.feature-category { border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; background:#fff; }
+.feature-category-header { min-height:36px; display:flex; align-items:center; gap:5px; padding:5px 7px 5px 10px; background:#f8fafc; border-bottom:1px solid #edf0f4; }
+.feature-category-title { flex:1; min-width:0; font-size:12px; font-weight:750; color:#263448; overflow-wrap:anywhere; }
+.feature-category.is-uncategorized .feature-category-header { background:#fbfcfe; }
+.feature-category .category-action { flex:0 0 26px; width:26px; height:26px; padding:0; font-size:16px; }
+.category-eye { flex:0 0 27px; width:27px; height:27px; }
+.category-feature-list { max-height:240px; margin:0; padding:5px 6px; border-left:0; min-height:32px; transition:background .12s,border-color .12s; }
+.feature-category.drop-target .category-feature-list { background:#eff6ff; outline:2px dashed #3b82f6; outline-offset:-3px; }
+.additional-feature-item { display:flex; align-items:center; gap:5px; padding:3px 4px; border-radius:7px; }
+.additional-feature-item.is-dragging { opacity:.45; }
+.additional-feature-center { display:flex; align-items:center; gap:7px; flex:1; min-width:0; border:0; background:transparent; color:#172033; padding:5px 3px; text-align:left; cursor:pointer; font:inherit; }
+.additional-feature-center:hover { background:#eef6f2; border-radius:6px; }
+.feature-move-select { width:94px; max-width:35%; min-width:0; padding:4px 3px; border:1px solid #d7dee8; border-radius:6px; background:#fff; color:#475467; font-size:10px; }
+.additional-feature-visibility { flex:0 0 27px; width:27px; height:27px; display:grid; place-items:center; border:0; border-radius:6px; background:transparent; color:#526174; cursor:pointer; }
+.additional-feature-visibility:hover { background:#eef2f7; }
+.additional-feature-visibility.is-hidden { color:#b42318; }
+.additional-feature-visibility svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+@media(max-width:760px) {
+  .feature-move-select { width:86px; max-width:34%; }
+  .feature-category { grid-column:1 / -1; }
+  .category-toolbar { grid-column:1 / -1; }
+}
