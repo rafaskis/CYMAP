@@ -40,7 +40,7 @@
   const state = {
     supabase: null, map: null, draw: null, layers: [], features: [],
     isEditor: false, user: null, selectedFeature: null,
-    visibility: {}, hiddenFeatureIds: new Set(), circlePlacementActive: false,
+    visibility: {}, hiddenFeatureIds: new Set(), categories: [], circlePlacementActive: false,
     additionalLayerId: null, mapLoaded: false
   };
 
@@ -64,28 +64,88 @@
     return state.visibility[layerId] !== false;
   }
   function featureVisible(featureId) {
-    return !state.hiddenFeatureIds.has(String(featureId));
+    const feature = state.features.find(item => String(item.id) === String(featureId));
+    if (!feature || feature.is_visible === false) return false;
+    if (!feature.category_id) return true;
+    const category = state.categories.find(item => String(item.id) === String(feature.category_id));
+    return !category || category.is_visible !== false;
   }
-  function loadFeatureVisibility() {
-    const key = `cymap.hiddenFeatures.v1.${state.user?.id || "anonymous"}`;
-    try {
-      const ids = JSON.parse(localStorage.getItem(key) || "[]");
-      state.hiddenFeatureIds = new Set(Array.isArray(ids) ? ids.map(String) : []);
-    } catch { state.hiddenFeatureIds = new Set(); }
-  }
-  function saveFeatureVisibility() {
-    const key = `cymap.hiddenFeatures.v1.${state.user?.id || "anonymous"}`;
-    localStorage.setItem(key, JSON.stringify([...state.hiddenFeatureIds]));
-  }
-  function toggleFeatureVisibility(feature) {
-    const id = String(feature.id);
-    if (state.hiddenFeatureIds.has(id)) state.hiddenFeatureIds.delete(id);
-    else state.hiddenFeatureIds.add(id);
-    saveFeatureVisibility();
+  function featureOwnVisible(feature) { return feature?.is_visible !== false; }
+  function categoryVisible(category) { return category?.is_visible !== false; }
+  function getLayer(id) { return state.layers.find(x => x.id === id); }
+
+  async function toggleFeatureVisibility(feature) {
+    const next = !featureOwnVisible(feature);
+    const { data, error } = await state.supabase.from("map_features")
+      .update({ is_visible: next, updated_at: new Date().toISOString() })
+      .eq("id", feature.id).select("*").single();
+    if (error) { setStatus(`Visibility update failed: ${error.message}`, true); return; }
+    const index = state.features.findIndex(item => item.id === feature.id);
+    if (index >= 0) state.features[index] = data;
     refreshAllSources();
     renderLayers();
   }
-  function getLayer(id) { return state.layers.find(x => x.id === id); }
+
+  async function toggleCategoryVisibility(category) {
+    const next = !categoryVisible(category);
+    const { data, error } = await state.supabase.from("map_feature_categories")
+      .update({ is_visible: next, updated_at: new Date().toISOString() })
+      .eq("id", category.id).select("*").single();
+    if (error) { setStatus(`Category update failed: ${error.message}`, true); return; }
+    const index = state.categories.findIndex(item => item.id === category.id);
+    if (index >= 0) state.categories[index] = data;
+    refreshAllSources();
+    renderLayers();
+  }
+
+  async function moveFeatureToCategory(feature, categoryId) {
+    const target = categoryId || null;
+    const { data, error } = await state.supabase.from("map_features")
+      .update({ category_id: target, updated_at: new Date().toISOString() })
+      .eq("id", feature.id).select("*").single();
+    if (error) { setStatus(`Move failed: ${error.message}`, true); return; }
+    const index = state.features.findIndex(item => item.id === feature.id);
+    if (index >= 0) state.features[index] = data;
+    renderLayers();
+  }
+
+  async function createCategory() {
+    const name = window.prompt("Όνομα νέας κατηγορίας:");
+    if (name === null) return;
+    const clean = name.trim();
+    if (!clean) { setStatus("Το όνομα κατηγορίας δεν μπορεί να είναι κενό.", true); return; }
+    const { data, error } = await state.supabase.from("map_feature_categories")
+      .insert({ owner_id: state.user.id, name: clean, is_visible: true, sort_order: state.categories.length })
+      .select("*").single();
+    if (error) { setStatus(`Category creation failed: ${error.message}`, true); return; }
+    state.categories.push(data);
+    renderLayers();
+  }
+
+  async function renameCategory(category) {
+    const name = window.prompt("Νέο όνομα κατηγορίας:", category.name);
+    if (name === null) return;
+    const clean = name.trim();
+    if (!clean) { setStatus("Το όνομα κατηγορίας δεν μπορεί να είναι κενό.", true); return; }
+    const { data, error } = await state.supabase.from("map_feature_categories")
+      .update({ name: clean, updated_at: new Date().toISOString() })
+      .eq("id", category.id).select("*").single();
+    if (error) { setStatus(`Category rename failed: ${error.message}`, true); return; }
+    const index = state.categories.findIndex(item => item.id === category.id);
+    if (index >= 0) state.categories[index] = data;
+    renderLayers();
+  }
+
+  async function deleteCategory(category) {
+    if (!window.confirm(`Διαγραφή της κατηγορίας «${category.name}»; Τα στοιχεία της θα μεταφερθούν στα Χωρίς κατηγορία.`)) return;
+    const { error } = await state.supabase.from("map_feature_categories").delete().eq("id", category.id);
+    if (error) { setStatus(`Category deletion failed: ${error.message}`, true); return; }
+    state.categories = state.categories.filter(item => item.id !== category.id);
+    state.features = state.features.map(feature => feature.category_id === category.id
+      ? { ...feature, category_id: null } : feature);
+    refreshAllSources();
+    renderLayers();
+  }
 
   function displayLayerName(layer) {
     if (!layer) return "";
@@ -560,13 +620,18 @@
   }
 
   async function loadLayersAndFeatures() {
-    const [layersResult, featuresResult] = await Promise.all([
+    const [layersResult, featuresResult, categoriesResult] = await Promise.all([
       state.supabase.from("map_layers").select("*").order("sort_order"),
-      state.supabase.from("map_features").select("*")
+      state.supabase.from("map_features").select("*"),
+      state.user
+        ? state.supabase.from("map_feature_categories").select("*").eq("owner_id", state.user.id).order("sort_order").order("created_at")
+        : Promise.resolve({ data: [], error: null })
     ]);
     if (layersResult.error) throw layersResult.error;
     if (featuresResult.error) throw featuresResult.error;
+    if (categoriesResult.error) throw new Error(`Categories table unavailable. Run the supplied CYMAP categories SQL migration. ${categoriesResult.error.message}`);
     state.layers = layersResult.data || [];
+    state.categories = categoriesResult.data || [];
     // Keep all permanent-layer features, but only show additional_data records
     // owned by the currently signed-in Supabase user.
     state.features = (featuresResult.data || []).filter(feature => {
@@ -574,6 +639,20 @@
       if (layer?.slug !== "additional_data") return true;
       return !!state.user && feature.owner_id === state.user.id;
     });
+    if (state.user) {
+      const legacyKey = `cymap.hiddenFeatures.v1.${state.user.id}`;
+      try {
+        const legacyHidden = JSON.parse(localStorage.getItem(legacyKey) || "[]");
+        if (Array.isArray(legacyHidden) && legacyHidden.length) {
+          const pending = state.features.filter(feature => legacyHidden.includes(String(feature.id)) && feature.is_visible !== false);
+          for (const feature of pending) {
+            const { error } = await state.supabase.from("map_features").update({ is_visible: false }).eq("id", feature.id);
+            if (!error) feature.is_visible = false;
+          }
+        }
+        localStorage.removeItem(legacyKey);
+      } catch (error) { console.warn("Could not migrate old feature visibility settings:", error); }
+    }
     state.additionalLayerId = additionalLayer()?.id || null;
     if (!state.additionalLayerId) {
       throw new Error('Missing layer "ΕΠΙΠΡΟΣΘΕΤΑ ΔΕΔΟΜΕΝΑ". Run the CYMAP protection migration SQL.');
@@ -691,27 +770,82 @@
         setMapLayerVisibility(layer);
       });
       layersEl.appendChild(row);
-      if (layer.slug === "additional_data") {
-        const items = state.features
-          .filter(f => f.layer_id === layer.id)
-          .slice()
-          .sort((a, b) => displayFeatureName(a).localeCompare(displayFeatureName(b), "el"));
+      if (layer.slug !== "additional_data") continue;
+
+      const toolbar = document.createElement("div");
+      toolbar.className = "category-toolbar";
+      const addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "button secondary category-add";
+      addButton.textContent = "＋ Νέα κατηγορία";
+      addButton.addEventListener("click", createCategory);
+      toolbar.appendChild(addButton);
+      layersEl.appendChild(toolbar);
+
+      const featureItems = state.features.filter(f => f.layer_id === layer.id)
+        .slice().sort((a, b) => displayFeatureName(a).localeCompare(displayFeatureName(b), "el"));
+
+      const renderGroup = (category, items, isUncategorized = false) => {
+        const group = document.createElement("section");
+        group.className = `feature-category${isUncategorized ? " is-uncategorized" : ""}`;
+        group.dataset.categoryId = category?.id || "";
+        const header = document.createElement("div");
+        header.className = "feature-category-header";
+        const title = document.createElement("span");
+        title.className = "feature-category-title";
+        title.textContent = isUncategorized ? "Χωρίς κατηγορία" : category.name;
+        header.appendChild(title);
+        if (!isUncategorized) {
+          const categoryEye = document.createElement("button");
+          const visible = categoryVisible(category);
+          categoryEye.type = "button";
+          categoryEye.className = `additional-feature-visibility category-eye${visible ? "" : " is-hidden"}`;
+          categoryEye.title = visible ? "Απόκρυψη κατηγορίας" : "Εμφάνιση κατηγορίας";
+          categoryEye.setAttribute("aria-label", categoryEye.title);
+          categoryEye.setAttribute("aria-pressed", String(visible));
+          categoryEye.innerHTML = visible
+            ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>'
+            : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.6 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a16 16 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.1-1.4"/></svg>';
+          categoryEye.addEventListener("click", () => toggleCategoryVisibility(category));
+          const rename = document.createElement("button");
+          rename.type = "button"; rename.className = "icon-button category-action"; rename.title = "Μετονομασία"; rename.textContent = "✎";
+          rename.addEventListener("click", () => renameCategory(category));
+          const remove = document.createElement("button");
+          remove.type = "button"; remove.className = "icon-button category-action"; remove.title = "Διαγραφή κατηγορίας"; remove.textContent = "×";
+          remove.addEventListener("click", () => deleteCategory(category));
+          header.append(categoryEye, rename, remove);
+        }
+        group.appendChild(header);
         const list = document.createElement("div");
-        list.className = "additional-feature-list";
-        list.setAttribute("aria-label", "Στοιχεία στα Επιπρόσθετα Δεδομένα");
+        list.className = "additional-feature-list category-feature-list";
+        list.setAttribute("aria-label", isUncategorized ? "Στοιχεία χωρίς κατηγορία" : `Στοιχεία: ${category.name}`);
+        list.addEventListener("dragover", event => { event.preventDefault(); group.classList.add("drop-target"); });
+        list.addEventListener("dragleave", event => { if (!group.contains(event.relatedTarget)) group.classList.remove("drop-target"); });
+        list.addEventListener("drop", event => {
+          event.preventDefault(); group.classList.remove("drop-target");
+          const id = event.dataTransfer.getData("text/plain");
+          const feature = state.features.find(item => String(item.id) === id);
+          if (feature) moveFeatureToCategory(feature, category?.id || null);
+        });
         if (!items.length) {
-          list.innerHTML = '<div class="additional-feature-empty">Δεν υπάρχουν στοιχεία ακόμη</div>';
+          list.innerHTML = '<div class="additional-feature-empty">Σύρετε εδώ λειτουργίες για να τις προσθέσετε</div>';
         } else {
           for (const feature of items) {
             const item = document.createElement("div");
             item.className = "additional-feature-item";
+            item.draggable = true;
+            item.addEventListener("dragstart", event => {
+              event.dataTransfer.setData("text/plain", String(feature.id));
+              event.dataTransfer.effectAllowed = "move";
+              item.classList.add("is-dragging");
+            });
+            item.addEventListener("dragend", () => item.classList.remove("is-dragging"));
             const centerButton = document.createElement("button");
-            centerButton.type = "button";
-            centerButton.className = "additional-feature-center";
+            centerButton.type = "button"; centerButton.className = "additional-feature-center";
             centerButton.title = "Κεντράρισμα στον χάρτη";
             centerButton.innerHTML = `<span class="additional-feature-dot" style="background:${escapeHtml(featureColor(feature))}"></span><span class="additional-feature-name">${escapeHtml(displayFeatureName(feature))}</span>`;
             centerButton.addEventListener("click", () => centerOnFeature(feature));
-            const visible = featureVisible(feature.id);
+            const visible = featureOwnVisible(feature);
             const eyeButton = document.createElement("button");
             eyeButton.type = "button";
             eyeButton.className = `additional-feature-visibility${visible ? "" : " is-hidden"}`;
@@ -720,25 +854,39 @@
             eyeButton.setAttribute("aria-pressed", String(visible));
             eyeButton.innerHTML = visible
               ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>'
-              : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.6 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a16 16 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.1-1.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+              : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.6 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a16 16 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.1-1.4"/></svg>';
             eyeButton.addEventListener("click", () => toggleFeatureVisibility(feature));
-            item.append(centerButton, eyeButton);
+            const moveSelect = document.createElement("select");
+            moveSelect.className = "feature-move-select";
+            moveSelect.title = "Μεταφορά σε κατηγορία";
+            moveSelect.setAttribute("aria-label", "Μεταφορά σε κατηγορία");
+            const uncategorizedOption = document.createElement("option");
+            uncategorizedOption.value = ""; uncategorizedOption.textContent = "Χωρίς κατηγορία";
+            moveSelect.appendChild(uncategorizedOption);
+            for (const cat of state.categories) {
+              const option = document.createElement("option"); option.value = cat.id; option.textContent = cat.name;
+              moveSelect.appendChild(option);
+            }
+            moveSelect.value = feature.category_id || "";
+            moveSelect.addEventListener("change", () => moveFeatureToCategory(feature, moveSelect.value));
+            item.append(centerButton, moveSelect, eyeButton);
             list.appendChild(item);
           }
         }
-        layersEl.appendChild(list);
+        group.appendChild(list);
+        layersEl.appendChild(group);
+      };
+
+      for (const category of state.categories) {
+        renderGroup(category, featureItems.filter(feature => feature.category_id === category.id));
       }
+      renderGroup(null, featureItems.filter(feature => !feature.category_id), true);
     }
   }
 
   function centerOnFeature(feature) {
     if (!state.map || !feature?.geometry) return;
-    if (!featureVisible(feature.id)) {
-      state.hiddenFeatureIds.delete(String(feature.id));
-      saveFeatureVisibility();
-      refreshAllSources();
-      renderLayers();
-    }
+    // Centering does not override the user's saved individual/category visibility settings.
     const layer = getLayer(feature.layer_id);
     if (layer && !layerVisible(layer.id)) {
       state.visibility[layer.id] = true;
@@ -793,10 +941,10 @@
       state.features = state.features.filter(feature =>
         getLayer(feature.layer_id)?.slug !== "additional_data"
       );
+      state.categories = [];
       refreshAllSources();
     }
     state.user = user;
-    loadFeatureVisibility();
     const { data, error } = await state.supabase.from("map_editors")
       .select("user_id").eq("user_id", user.id).maybeSingle();
     if (error) console.warn("Editor permission check:", error.message);
@@ -815,6 +963,7 @@
     state.circlePlacementActive = false;
     if (state.map) state.map.getCanvas().style.cursor = "";
     state.hiddenFeatureIds = new Set();
+    state.categories = [];
     state.isEditor = false;
     // Remove personal data from memory and redraw immediately on logout.
     state.features = state.features.filter(feature =>
@@ -1189,6 +1338,7 @@
       const row = {
         layer_id: state.additionalLayerId,
         owner_id: state.user.id,
+        category_id: null, is_visible: true,
         name_el: name, name_en: "",
         geometry: feature.geometry,
         properties: updatedProperties
@@ -1367,6 +1517,7 @@
     const { data, error } = await state.supabase.from("map_features").insert({
       layer_id: state.additionalLayerId,
       owner_id: state.user.id,
+      category_id: null, is_visible: true,
       name_el: name, name_en: "",
       geometry,
       properties: { ...(coordinateMode === "circle" ? circleProperties : {}), color }
